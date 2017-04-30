@@ -308,7 +308,9 @@ GETPOST(){
             echo -e "\e[0;36m""${username}@${userhub}:""\e[m\n"
             echo "$posttxt"
         fi
+        # if (($verbose)); then
             echo -e "\n\e[0;36m""post url: $posturl2""\e[m"
+        # fi
     else
         echo -e '\E[37;31m'"\033[1m[error]\033[0m" "No post returned, please try again or give up."
         (($verbose)) && echo -e "\e[0;36m""Exiting.""\e[m"
