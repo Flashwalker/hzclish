@@ -1,0 +1,558 @@
+#!/bin/bash
+#
+# hzclish - Hubzilla (ex Red Matrix) cli bash script.
+# Version 1.0
+# Source: https://notabug.org/uzver/hzclish.git
+#
+# License: WTFPL2 http://wtfpl2.com/
+#
+# Deps: curl, jq, markdown, grep, sed, awk, tr, mkdir, mktemp
+
+dotdir="${HOME}/.hzclish"
+verbose=0
+ssl=1
+useragent='Mozilla/5.0 (Windows NT 6.1; rv:41.0) Gecko/20100101 Firefox/41.0'
+
+# FUNCTIONS
+
+USAGE(){
+    exec=$(basename "$0"); [[ "$exec" ]] || exec="${0##*/}"
+    cat << EOF
+  $exec - CLI bash wrapper script for the Hubzilla (Red Matrix) API.
+
+  USAGE: $exec [OPTIONS] [-u LOGIN:DOMAIN[:PASSWORD]] [<<<"MESSAGE"]
+    
+  OPTIONS:
+    -c config                  Specify config file
+                                (you can use different configs for different accounts)
+    -D                         Delete config and cookie files
+    -g ID                      Get post of given ID
+    -h, --help                 Show this help
+    -i                         Post from stdin
+    -p                         Post message
+    -q                         Less verbose successful printing
+    -r                         Renew auth token
+    -s                         Set authentification (save login, password)
+    -S yes|no                  Use or not https (default: yes) (actual with -u)
+    -u LOGIN:DOMAIN[:PASSWORD] Specify auth inline, e.g.: "inbox@example.com:hubzdomain.com:password", or:
+        "channel@hubzdomain.com:password", or:
+        "channel@hubzdomain.com"
+                                (use it if you do NOT want to save auth)
+                                (implies not with: -c, -D, -r, -s)
+    -v                         Verbose mode
+    
+    Notice: For now length of message limited by bash variable size limit.
+
+  EXAMPLES:
+    Set authentification to config file:
+      $exec -vs
+    Post message:
+      $exec -qvp
+     or just:
+      $exec
+    Post message from stdin:
+      $exec <<<"Hello world!"
+     or:
+      cat myPost.md | $exec
+    Rad post by id:
+      $exec -g 1234567
+      $exec -qvg 1234567
+EOF
+}
+
+CONFIG(){
+    # Check for config file and create it if it does not exist
+    if ! (($custconfig)); then
+        [[ -f "${dotdir}/defaultconfig" ]] && source "${dotdir}/defaultconfig"
+    fi
+    if [[ -f "$config" ]]; then
+        ! (($quiet)) && (($verbose)) && echo -e "\e[0;36m""Using config: $config""\e[m"
+        (($custconfig)) && dotdir=$(dirname "$config")
+    else
+        mkdir -p "$dotdir" && chmod 700 "$dotdir"
+        echo -e '\E[37;34m'"\033[1m[notice]\033[0m" "No config file found! Let's create one."
+        read -p "Enter hub domain (example.com): " domain
+        domain=$(echo "${domain%/*}" | sed 's|^[[:space:]]*https\?://||g')
+        if ! (($sslsetted)); then
+            IFSSL(){
+                read -p "Does your hub use SSL? (y/n) " sslresponse
+            }
+            IFSSL
+            if [[ $sslresponse == [Nn] ]]; then
+                ssl=0
+                hub="http://$domain"
+            elif [[ $sslresponse == [Yy] ]]; then
+                ssl=1
+                hub="https://$domain"
+            else
+                echo "Response not valid, please answer y or n."
+                IFSSL
+            fi
+        fi
+        if (($ssl)); then
+            hub="https://$domain"
+        else
+            hub="http://$domain"
+        fi
+        read -p "Enter login e-mail: " login
+        read -p "Enter nickname (channel nickname) (leave blank if not): " channel
+        if [[ "$channel" ]]; then
+            zid="${channel}@$domain"
+        else
+            zid="${login}@$domain"
+        fi
+        if ! (($custconfig)); then
+            config="${dotdir}/${zid}.config"
+            echo "config=\"$config\"">>"${dotdir}/defaultconfig"
+        fi
+{
+cat << EOF
+hub="$hub"
+login="$login"
+channel="$channel"
+zid="$zid"
+useragent="$useragent"
+EOF
+}>"$config"
+        chmod 600 "$config"
+        if ! (($quiet)) && (($verbose)); then
+            echo -e "\e[0;36m""These variables have been saved to ${config}:""\e[m"
+            echo -e "\e[0;36m"; cat "$config"; echo -e "\e[m"
+        fi
+    fi
+    source "$config"
+    cookie="${dotdir}/${zid}.cookie"
+    [[ -f "$cookie" ]] || (touch "$cookie" && chmod 600 "$cookie")
+}
+
+PASSWORD(){
+unset password
+if [[ "$config" ]] && [[ "$(grep 'password=' "$config")" ]]; then
+    source "$config"
+else
+    echo ""
+    prompt="What is your password?: "
+    while IFS= read -p "$prompt" -r -s -n 1 char
+    do
+        if [[ $char == $'\0' ]]; then
+            break
+        fi
+            prompt='*'
+            password+="$char"
+    done
+    echo -e "\n"
+fi
+}
+
+SETAUTH(){
+    CONFIG
+    source "$config"
+    if [[ "$(grep 'token=.' "$config")" ]]; then
+        echo -e '\E[37;31m'"\033[1m[error]\033[0m" "Script appears to be registered previously."
+        echo "Use -d option to delete auth and then -s to try again."
+        (($verbose)) && echo -e "\e[0;36m""Exiting.""\e[m"
+        exit 1
+    else
+        if ! [[ "$password" ]]; then
+            echo -e '\E[37;34m'"\033[1m[notice]\033[0m" "This will be the only time you will be asked for your password."
+            echo "Your password will be stored plain in config file"
+            PASSWORD
+        fi
+        sed -i '/password=/d' "$config"
+        echo password=\"$(sed 's/\"/\\"/g'<<<"$password")\">>"$config"
+        if (($verbose)); then
+            echo -e "\e[0;36m""Password have been saved to $config""\e[m"
+        fi
+        
+        source "$config"
+        echo "Getting token..."
+        getauth=$(curl -ksSi --trace-ascii - -u "$login":"$password" \
+         -H "User-Agent: $useragent" \
+        "${hub}/api/account/verify_credentials" \
+         --cookie-jar "$cookie" --cookie "$cookie")
+        token=$(echo "$getauth"|sed -n 's/^.*Authorization: Basic \(.*\)/\1/p')
+        error=$(echo "$getauth" | grep -io 'HTTP.*401 Unauthorized')
+        if [[ "$error" ]]; then
+            echo -e '\E[37;31m'"\033[1m[error]\033[0m" "$error"
+            echo "Check/set your login/password and try again"
+            (($verbose)) && echo -e "\e[0;36m""Exiting.""\e[m"
+            exit 1
+        fi
+        unset getauth
+        if [[ "$token" ]]; then
+            sed -i '/token=/d' "$config"
+            echo "token=\"${token}\"">>"$config"
+            unset token
+            if (($verbose)); then
+                echo -e '\E[37;32m'"\033[1m[success]\033[0m" "Token saved."
+            fi
+        else
+            echo -e '\E[37;31m'"\033[1m[error]\033[0m" "Getting token failed. Check/set your login/password/connection."
+            (($verbose)) && echo -e "\e[0;36m""Exiting.""\e[m"
+            exit 1
+        fi
+    fi
+}
+
+RETOKEN(){
+    CONFIG
+    source "$config"
+    while [[ ! $retokened ]]; do
+        if ! (($quiet)) && (($verbose)); then
+            echo -e "\e[0;36m""Getting new token""\e[m"
+        fi
+        if ! [[ "$password" ]]; then
+            PASSWORD
+        fi
+        getauth=$(curl -ksSi --trace-ascii - -u "$login":"$password" \
+         -H "User-Agent: $useragent" \
+        "${hub}/api/account/verify_credentials" \
+         --cookie-jar "$cookie" --cookie "$cookie")
+        
+        unset password
+        token=$(echo "$getauth"|sed -n 's/^.*Authorization: Basic \(.*\)/\1/p')
+        error=$(echo "$getauth" | grep -io 'HTTP.*401 Unauthorized')
+        if [[ "$error" ]]; then
+            echo -e '\E[37;31m'"\033[1m[error]\033[0m" "$error"
+            echo "Check/set your login/password"
+            (($verbose)) && echo -e "\e[0;36m""Exiting.""\e[m"
+            exit 1
+        fi
+        unset getauth
+        if [[ "$token" ]]; then
+            sed -i '/token/d' "$config"
+            echo "token=\"${token}\"">>"$config"
+            unset token
+            if (($verbose)); then
+                echo -e '\E[37;32m'"\033[1m[success]\033[0m" "Token saved."
+            fi
+        else
+            echo -e '\E[37;31m'"\033[1m[error]\033[0m" "Getting token failed. Check/set your login/password/connection."
+            (($verbose)) && echo -e "\e[0;36m""Exiting.""\e[m"
+            exit 1
+        fi
+        ((retokened++))
+    done
+}
+
+GETPOST(){
+    if ! (($inlineauth)); then
+        CONFIG
+        source "$config"
+        unset password
+    fi
+    local pid="$1"
+    [[ "$2" == 'urlonly' ]] && local urlonly=1
+    local post=""
+    GETPOSTINIT(){
+        if (($inlineauth)); then
+            ! [[ "$password" ]] && PASSWORD
+            post=$(
+                curl -ksSi --trace-ascii - -u "$login":"$password" \
+                    -H "User-Agent: $useragent" \
+                    -H "Content-Type: application/json" \
+                    -H 'Accept: application/json' \
+                    "${hub}/api/statuses/show.json?id=$pid")
+            unset password
+        else
+            post=$(
+                 curl -ksSi --trace-ascii - \
+                    -H "Authorization: Basic $token" \
+                    -H "User-Agent: $useragent" \
+                    -H "Content-Type: application/json" \
+                    -H 'Accept: application/json' \
+                    "${hub}/api/statuses/show.json?id=$pid" \
+                    --cookie-jar "$cookie" --cookie "$cookie")
+            unset token
+        fi
+        postbody=$(echo -n "$post"|grep -iom1 '{\".*[^\]\(["}]\|\]\)}')
+        mid=$(echo -n "$postbody"|jq -r '.message_id')
+        posturl=$(echo -n "$postbody"|jq -r '.url')
+        posturl2="$(echo -n "$posturl"|sed 's|^.*\(https\?://[^/]\+\)/.*|\1|')/display/$mid"
+        if ! (($urlonly)); then
+            username=$(echo -n "$postbody"|jq -r '.user.screen_name')
+            userurl=$(echo -n "$postbody"|jq -r '.user.url')
+            userhub=$(echo "$userurl"|sed 's|^.*https\?://\([^/]\+\)/.*|\1|')
+            posttxt=$(echo -n "$postbody"|jq -r '.text')
+        fi
+    }
+    GETPOSTINIT
+    error=$(echo "$post" | grep -iom1 '^HTTP.*401 Unauthorized')
+    if [[ "$error" ]]; then
+        if [[ $retokened != 1 ]] && [[ $inlineauth != 1 ]]; then
+            if ! (($quiet)); then
+                echo -e '\E[37;31m'"\033[1m[error]\033[0m" "$error"
+                echo "Token not valid, requesting new one..."
+            fi
+            RETOKEN
+            GETPOSTINIT
+            error=$(echo "$post" | grep -iom1 '^HTTP.*401 Unauthorized')
+            if [[ "$error" ]]; then
+                echo -e '\E[37;31m'"\033[1m[error]\033[0m" "$error"
+                echo "Can't get post due authorization issue."
+                echo "Check/set your login/password and try to get post again."
+                (($verbose)) && echo -e "\e[0;36m""Exiting.""\e[m"
+                exit 1
+            fi
+        else
+            echo -e '\E[37;31m'"\033[1m[error]\033[0m" "$error"
+            echo "Can't get post due authorization issue."
+            echo "Check/set your login/password and try to get post again."
+            (($verbose)) && echo -e "\e[0;36m""Exiting.""\e[m"
+            exit 1
+        fi
+    fi
+
+    if [[ "$mid" ]]; then
+        if ! (($urlonly)); then
+            echo -e "\e[0;36m""${username}@${userhub}:""\e[m\n"
+            echo "$posttxt"
+        fi
+            echo -e "\n\e[0;36m""post url: $posturl2""\e[m"
+    else
+        echo -e '\E[37;31m'"\033[1m[error]\033[0m" "No post returned, please try again or give up."
+        (($verbose)) && echo -e "\e[0;36m""Exiting.""\e[m"
+        exit 1
+    fi
+}
+
+POST(){
+    if ! (($inlineauth)); then
+        CONFIG
+        source "$config"
+        unset password
+    fi
+    local postfile=$(mktemp /tmp/hzpost.XXXXXX)
+    local message=$(mktemp /tmp/hzmessage.XXXXXX)
+    chmod 600 "$postfile" "$message"
+    local post=""
+    POSTINIT(){
+        if ! [[ -t 0 ]] || (($stdin)); then
+            eval 'stdin=$(cat); echo "$stdin"' >"$message"
+        else
+            $EDITOR "$message"
+        fi
+        msglength=$(cat "$message" | wc -m)
+        if ! (($msglength)); then
+            echo -e '\E[37;31m'"\033[1m[error]\033[0m" "The message is empty. Not posting message."
+            echo "Not deleting the file \"$message\" in case it is not empty"
+            /bin/rm -f "$postfile"
+            (($verbose)) && echo -e "\e[0;36m""Exiting.""\e[m"
+            exit 1
+        fi
+        ## Remove leading blank lines
+        sed -i '/./,$!d' "$message"
+        
+        catline=$(head -n 1 "$message" | grep -iom1 '^[[:space:]]*\?\*.*\?')
+        catsarr=($(echo "$catline" | sed 's|[\*]| |g; s|^[[:space:]]*||; s|,||g; s/\"/\\"/g'))
+        for c in "${catsarr[@]}"; do category+="${c},"; done
+        tagline=$(tail -n 1 "$message" | grep -io '^[[:space:]]*\?\#.*\?')
+        tags=$(echo "$tagline" | sed 's|^[[:space:]]*||; s|,||g')
+        msg=$(cat "$message")
+        [[ "$tagline" ]] && msg=$(echo "$msg" | awk -v tl="$tagline" -F "$tagline" '{print $1}')
+        [[ "$catline" ]] && msg=$(echo "$msg" | awk -v cl="$catline" '$0 == cl {i=1;next};i && i++ <= 999')
+        title=$(echo "$msg" | head -n 1 | grep -iom1 '^[[:space:]]*\?\#[[:space:]]\+.*\?' | sed 's/\"/\\"/g')
+        [[ "$title" ]] && msg=$(echo "$msg" | sed 1d)
+        
+        [[ "$title" ]] && echo "title=\"${title##*#}\"">"$postfile"
+        [[ "$category" ]] && echo "category=\"${category%,}\"">>"$postfile"
+        htmlstatus=$(echo -n "$msg" | markdown | sed 's/\"/\\"/g' | tr -d "\n"; [[ "$tags" ]] && echo "<br><br>$tags" | sed 's/\"/\\"/g' || echo "")
+        [[ "$htmlstatus" ]] && echo "htmlstatus=\"$htmlstatus\"">>"$postfile"
+        
+        source "$postfile"
+
+        if (($inlineauth)); then
+            ! [[ "$password" ]] && PASSWORD
+            post=$(curl -ksSi --trace-ascii - -u "$login":"$password" \
+             -H "User-Agent: $useragent" \
+             -X POST \
+            -d "title=${title}&category=$category" \
+            --data-urlencode "htmlstatus=$htmlstatus" \
+            "$hub"/api/statuses/update)
+            unset password
+        else
+            post=$(curl -ksSi --trace-ascii - \
+             -H "Authorization: Basic $token" \
+             -H "User-Agent: $useragent" \
+             -X POST \
+            -d "title=${title}&category=${category}&channel=$channel" \
+            --data-urlencode "htmlstatus=$htmlstatus" \
+            "$hub"/api/statuses/update \
+             --cookie-jar "$cookie" --cookie "$cookie")
+            unset token
+        fi
+        
+        postbody=$(echo -n "$post"|grep -iom1 '{\".*[^\]\(["}]\|\]\)}')
+        pid=$(echo -n "$postbody"|jq -r '.id')
+        username=$(echo -n "$postbody"|jq -r '.user.screen_name')
+        userurl=$(echo -n "$postbody"|jq -r '.user.url')
+        userhub=$(echo "$userurl" | sed 's|^.*https\?://\([^/]\+\)/.*|\1|')
+    }
+    POSTINIT
+    
+    error=$(echo "$post" | grep -iom1 '^HTTP.*401 Unauthorized')
+    if [[ "$error" ]]; then
+        if ! (($retokened)) && ! (($inlineauth)); then
+            if ! (($quiet)); then
+                echo -e '\E[37;31m'"\033[1m[error]\033[0m" "$error"
+                echo "Token not valid, requesting new one..."
+            fi
+            RETOKEN
+            POSTINIT
+            error=$(echo "$post" | grep -iom1 '^HTTP.*401 Unauthorized')
+            if [[ "$error" ]]; then
+                echo -e '\E[37;31m'"\033[1m[error]\033[0m" "$error"
+                echo "Can't post due authorization issue."
+                echo "Check/set your login/password and try to post again."
+                (($verbose)) && echo -e "\e[0;36m""Exiting.""\e[m"
+                exit 1
+            fi
+        else
+            echo -e '\E[37;31m'"\033[1m[error]\033[0m" "$error"
+            echo "Can't post due authorization issue."
+            echo "Check/set your login/password and try to post again."
+            (($verbose)) && echo -e "\e[0;36m""Exiting.""\e[m"
+            exit 1
+        fi
+    fi
+    
+    if [[ "$pid" ]]; then
+        if ! (($quiet)); then
+            echo -e '\E[37;32m'"\033[1m[success]\033[0m" "Message posted"
+        fi
+            GETPOST "$pid" urlonly
+        /bin/rm -f "$postfile" "$message"
+    else
+        echo -e '\E[37;31m'"\033[1m[error]\033[0m" "No post id returned, please try again or give up."
+        echo "Message should still be saved in the file $message"
+        /bin/rm -f "$postfile"
+        (($verbose)) && echo -e "\e[0;36m""Exiting.""\e[m"
+        exit 1
+    fi
+}
+
+# DELETE CONFIG & COOKIE
+DELETE(){
+        [[ "$config" ]] && source "$config" && unset password
+    ! (($quiet)) && echo Deleting: cookie: "${dotdir}/${zid}.cookie", config: "$config"
+    [[ "$dotdir" && "$zid" ]] && [[ -f "${dotdir}/${zid}.cookie" ]] && /bin/rm -f "${dotdir}/${zid}.cookie"
+    [[ "$config" ]] && [[ -f "$config" ]] && /bin/rm -f "$config"
+}
+
+if [[ $# -lt 1 ]]; then
+    POST
+    exe=1
+elif [[ "$1" == '--help' ]]; then
+    USAGE
+    exit 0
+fi
+
+# RUN OPTIONS
+while getopts "a:c:Dg:hipqrsS:u:v" OPTION
+do
+  case $OPTION in
+    c)
+      if [[ "$OPTARG" ]]; then
+        config="$OPTARG"
+        custconfig=1
+      fi
+      ;;
+    D)
+      DELETE
+      exe=1
+      ;;
+    g)
+      GETPOST "$OPTARG"
+      exe=1
+      ;;
+    h)
+      USAGE
+      exe=1
+      ;;
+    i)
+      stdin=1
+      ;;
+    p)
+      POST
+      exe=1
+      ;;
+    q)
+      quiet=1
+      ;;
+    r)
+      RETOKEN
+      exe=1
+      ;;
+    s)
+      SETAUTH
+      exe=1
+      ;;
+    S)
+      sslarg="$OPTARG"
+      if [[ "$sslarg" ]]; then
+        if [[ "$sslarg" == [nN][oO] ]]; then
+          ssl=0
+          sslsetted=1
+        elif [[ "$sslarg" == [yY][eE][sS] ]];   then
+          ssl=1
+          sslsetted=1
+        fi
+      else
+        ssl=1
+        sslsetted=1
+      fi
+      ;;
+    u)
+      if [[ "$OPTARG" ]]; then
+        # "user@example.com:hubzdomain.com:password"
+        haspass=$(echo "$OPTARG" | awk -F':' '{print $3}')
+        login="${OPTARG%%:*}"
+        if [[ "$haspass" ]]; then
+          domainandpass="${OPTARG#*:}"
+          domain="${domainandpass%%:*}"
+          password="${domainandpass#*:}"
+          unset haspass
+          unset domainandpass
+        else
+          domain="${OPTARG##*:}"
+        fi
+        if (($ssl)); then
+          hub="https://$domain"
+        else
+          hub="http://$domain"
+        fi
+        zid=""
+        inlineauth=1
+      fi
+      ;;
+    v)
+      verbose=1
+      ;;
+  esac
+done
+shift $(($OPTIND -1))
+
+## Post if no other functional commands was given
+if ! (($exe)); then
+  POST
+  exe=1
+fi
+
+exit 0
+
+### TODO:
+# message id (mid)
+# message size limit (bash var)
+# use keyring
+# delete post
+# comment post
+# delete comment
+# reshare post
+# like, dislike
+# attach image to post
+# read post + comments
+# notifications
+# debug
+# version option
+# webdav get files
+# more errors handle
