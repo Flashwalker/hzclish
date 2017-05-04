@@ -4,7 +4,7 @@
 
 * [curl](https://curl.haxx.se/) (ubuntu updates/main, security/main, /main repos has this)
 * [jq](https://stedolan.github.io/jq/) (ubuntu backports/universe, /universe repos has this)
-* [markdown][mdown] (ubuntu /universe repo has this)
+* [markdown][mdown] or [pandoc](http://pandoc.org/) (ubuntu /universe repo has this)
 * grep, sed, awk, tr, mkdir, mktemp, rm, wc (normally GNU/linux has this)
 
 ### Usage:
@@ -20,6 +20,7 @@ Config folder: ~/.hzclish
 * If you have hashtags enabled in your Hubzilla profile settings, words like `#tag1 #tag2 ... #tag3` (hash and text) will be parsed as hashtags (if they not starting the line). And very last line which starts with `#tag1 #tag2 ... #tag3`;
 * Top first line of post message (or second if you specified categories at first one), if it starts with `# Title of message` (one hash and space and text), will be parsed as title of the post (In Hubzilla you can define post title in separate filed);
 * Hubzilla turns youtube urls to `[embed]http://www.youtube.com/watch?v=YOUTUBEID[/embed]` bbcode, and, somehow, it breaks hashtags if you specified them after youtube url (even after new line). So here is how you should do it right: add two spaces and new line after youtube url and then hashtags
+
 ```
 http://www.youtube.com/watch?v=YOUTUBEID  
 

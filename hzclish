@@ -5,12 +5,15 @@
 # Source: https://notabug.org/uzver/hzclish.git
 #
 # License: WTFPL2 http://wtfpl2.com/
+# uzver(at)protonmail.ch
 #
-# Deps: curl, jq, markdown, grep, sed, awk, tr, mkdir, mktemp
+# Deps: curl, jq, markdown or pandoc, grep, sed, awk, tr, mkdir, mktemp, rm, wc
+
 
 dotdir="${HOME}/.hzclish"
 verbose=0
 ssl=1
+markdown="markdown"
 useragent='Mozilla/5.0 (Windows NT 6.1; rv:41.0) Gecko/20100101 Firefox/41.0'
 
 # FUNCTIONS
@@ -30,6 +33,7 @@ USAGE(){
     -h, --help                 Show this help
     -i                         Post from stdin
     -p                         Post message
+    -P                         Use pandoc instead of markdown
     -q                         Less verbose successful printing
     -r                         Renew auth token
     -s                         Set authentification (save login, password)
@@ -47,16 +51,15 @@ USAGE(){
     Set authentification to config file:
       $exec -vs
     Post message:
-      $exec -qvp
-     or just:
       $exec
+      $exec -vp
     Post message from stdin:
       $exec <<<"Hello world!"
-     or:
+      echo "Hello world!" | $exec
       cat myPost.md | $exec
-    Rad post by id:
+    Read post by id:
       $exec -g 1234567
-      $exec -qvg 1234567
+      $exec -qg 1234567
 EOF
 }
 
@@ -308,9 +311,9 @@ GETPOST(){
             echo -e "\e[0;36m""${username}@${userhub}:""\e[m\n"
             echo "$posttxt"
         fi
-        # if (($verbose)); then
+        if ! (($quiet)); then
             echo -e "\n\e[0;36m""post url: $posturl2""\e[m"
-        # fi
+        fi
     else
         echo -e '\E[37;31m'"\033[1m[error]\033[0m" "No post returned, please try again or give up."
         (($verbose)) && echo -e "\e[0;36m""Exiting.""\e[m"
@@ -358,7 +361,8 @@ POST(){
         
         [[ "$title" ]] && echo "title=\"${title##*#}\"">"$postfile"
         [[ "$category" ]] && echo "category=\"${category%,}\"">>"$postfile"
-        htmlstatus=$(echo -n "$msg" | markdown | sed 's/\"/\\"/g' | tr -d "\n"; [[ "$tags" ]] && echo "<br><br>$tags" | sed 's/\"/\\"/g' || echo "")
+        (("$pandoc")) && markdown="pandoc -f markdown -t html"
+        htmlstatus=$(echo -n "$msg" | $markdown | sed 's/\"/\\"/g' | tr -d "\n"; [[ "$tags" ]] && echo "<br><br>$tags" | sed 's/\"/\\"/g' || echo "")
         [[ "$htmlstatus" ]] && echo "htmlstatus=\"$htmlstatus\"">>"$postfile"
         
         source "$postfile"
@@ -421,8 +425,8 @@ POST(){
     if [[ "$pid" ]]; then
         if ! (($quiet)); then
             echo -e '\E[37;32m'"\033[1m[success]\033[0m" "Message posted"
-        fi
             GETPOST "$pid" urlonly
+        fi
         /bin/rm -f "$postfile" "$message"
     else
         echo -e '\E[37;31m'"\033[1m[error]\033[0m" "No post id returned, please try again or give up."
@@ -450,7 +454,7 @@ elif [[ "$1" == '--help' ]]; then
 fi
 
 # RUN OPTIONS
-while getopts "a:c:Dg:hipqrsS:u:v" OPTION
+while getopts "a:c:Dg:hipPqrsS:u:v" OPTION
 do
   case $OPTION in
     c)
@@ -477,6 +481,9 @@ do
     p)
       POST
       exe=1
+      ;;
+    P)
+      pandoc=1
       ;;
     q)
       quiet=1
