@@ -2,7 +2,7 @@
 #
 # hzclish - Hubzilla (ex Red Matrix) cli bash script.
 # Version 1.0
-# Source: https://notabug.org/uzver/hzclish.git
+# Source: https://notabug.org/uzver/hzclish
 #
 # License: WTFPL2 http://wtfpl2.com/
 # uzver(at)protonmail.ch
@@ -251,7 +251,8 @@ GETPOST(){
         if (($inlineauth)); then
             ! [[ "$password" ]] && PASSWORD
             post=$(
-                curl -ksSi --trace-ascii - -u "$login":"$password" \
+                # curl -ksSi --trace-ascii - -u "$login":"$password" \
+curl -ks -u "$login":"$password" \
                     -H "User-Agent: $useragent" \
                     -H "Content-Type: application/json" \
                     -H 'Accept: application/json' \
@@ -259,7 +260,8 @@ GETPOST(){
             unset password
         else
             post=$(
-                 curl -ksSi --trace-ascii - \
+                 # curl -ksSi --trace-ascii - \
+curl -ks \
                     -H "Authorization: Basic $token" \
                     -H "User-Agent: $useragent" \
                     -H "Content-Type: application/json" \
@@ -280,7 +282,8 @@ GETPOST(){
         fi
     }
     GETPOSTINIT
-    error=$(echo "$post" | grep -iom1 '^HTTP.*401 Unauthorized')
+    # error=$(echo "$post" | grep -iom1 '^HTTP.*401 Unauthorized')
+error=$(echo "$post" | grep -iom1 '^This api requires login')
     if [[ "$error" ]]; then
         if [[ $retokened != 1 ]] && [[ $inlineauth != 1 ]]; then
             if ! (($quiet)); then
@@ -289,7 +292,8 @@ GETPOST(){
             fi
             RETOKEN
             GETPOSTINIT
-            error=$(echo "$post" | grep -iom1 '^HTTP.*401 Unauthorized')
+            # error=$(echo "$post" | grep -iom1 '^HTTP.*401 Unauthorized')
+error=$(echo "$post" | grep -iom1 '^This api requires login')
             if [[ "$error" ]]; then
                 echo -e '\E[37;31m'"\033[1m[error]\033[0m" "$error"
                 echo "Can't get post due authorization issue."
@@ -316,6 +320,7 @@ GETPOST(){
         fi
     else
         echo -e '\E[37;31m'"\033[1m[error]\033[0m" "No post returned, please try again or give up."
+(($verbose)) && echo -e '\E[37;31m'"\033[1m[post]\033[0m" && echo "$post"
         (($verbose)) && echo -e "\e[0;36m""Exiting.""\e[m"
         exit 1
     fi
@@ -369,7 +374,8 @@ POST(){
 
         if (($inlineauth)); then
             ! [[ "$password" ]] && PASSWORD
-            post=$(curl -ksSi --trace-ascii - -u "$login":"$password" \
+            # post=$(curl -ksSi --trace-ascii - -u "$login":"$password" \
+post=$(curl -ks -u "$login":"$password" \
              -H "User-Agent: $useragent" \
              -X POST \
             -d "title=${title}&category=$category" \
@@ -377,7 +383,8 @@ POST(){
             "$hub"/api/statuses/update)
             unset password
         else
-            post=$(curl -ksSi --trace-ascii - \
+            # post=$(curl -ksSi --trace-ascii - \
+post=$(curl -ksS \
              -H "Authorization: Basic $token" \
              -H "User-Agent: $useragent" \
              -X POST \
@@ -389,6 +396,11 @@ POST(){
         fi
         
         postbody=$(echo -n "$post"|grep -iom1 '{\".*[^\]\(["}]\|\]\)}')
+        mid=$(echo -n "$postbody"|jq -r '.message_id')
+        if [[ "$mid" ]]; then
+            posturl=$(echo -n "$postbody"|jq -r '.url')
+            posturl2="$(echo -n "$posturl"|sed 's|^.*\(https\?://[^/]\+\)/.*|\1|')/display/$mid"
+        fi
         pid=$(echo -n "$postbody"|jq -r '.id')
         username=$(echo -n "$postbody"|jq -r '.user.screen_name')
         userurl=$(echo -n "$postbody"|jq -r '.user.url')
@@ -396,7 +408,8 @@ POST(){
     }
     POSTINIT
     
-    error=$(echo "$post" | grep -iom1 '^HTTP.*401 Unauthorized')
+    # error=$(echo "$post" | grep -iom1 '^HTTP.*401 Unauthorized')
+error=$(echo "$post" | grep -iom1 '^This api requires login')
     if [[ "$error" ]]; then
         if ! (($retokened)) && ! (($inlineauth)); then
             if ! (($quiet)); then
@@ -405,7 +418,8 @@ POST(){
             fi
             RETOKEN
             POSTINIT
-            error=$(echo "$post" | grep -iom1 '^HTTP.*401 Unauthorized')
+            # error=$(echo "$post" | grep -iom1 '^HTTP.*401 Unauthorized')
+error=$(echo "$post" | grep -iom1 '^This api requires login')
             if [[ "$error" ]]; then
                 echo -e '\E[37;31m'"\033[1m[error]\033[0m" "$error"
                 echo "Can't post due authorization issue."
@@ -422,14 +436,20 @@ POST(){
         fi
     fi
     
-    if [[ "$pid" ]]; then
+    if [[ "$mid" || "$pid" ]]; then
         if ! (($quiet)); then
             echo -e '\E[37;32m'"\033[1m[success]\033[0m" "Message posted"
-            GETPOST "$pid" urlonly
+# (($verbose)) && echo -e '\E[37;32m'"\033[1m[post]\033[0m" && echo "$post"
+            if  [[ "$mid" ]]; then
+                echo -e "\e[0;36m""post url: $posturl2""\e[m"
+            else
+                GETPOST "$pid" urlonly
+            fi
         fi
         /bin/rm -f "$postfile" "$message"
     else
         echo -e '\E[37;31m'"\033[1m[error]\033[0m" "No post id returned, please try again or give up."
+(($verbose)) && echo -e '\E[37;31m'"\033[1m[post]\033[0m" && echo "$post"
         echo "Message should still be saved in the file $message"
         /bin/rm -f "$postfile"
         (($verbose)) && echo -e "\e[0;36m""Exiting.""\e[m"
