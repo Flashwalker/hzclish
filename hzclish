@@ -73,7 +73,7 @@ CONFIG(){
         (($custconfig)) && dotdir=$(dirname "$config")
     else
         mkdir -p "$dotdir" && chmod 700 "$dotdir"
-        echo -e '\E[37;34m'"\033[1m[notice]\033[0m" "No config file found! Let's create one."
+        echo -e '\E[37;34m'"\033[1m[notice]\033[0m" "No config file found! Let's create one"
         read -p "Enter hub domain (example.com): " domain
         domain=$(echo "${domain%/*}" | sed 's|^[[:space:]]*https\?://||g')
         if ! (($sslsetted)); then
@@ -88,7 +88,7 @@ CONFIG(){
                 ssl=1
                 hub="https://$domain"
             else
-                echo "Response not valid, please answer y or n."
+                echo "Response not valid, please answer y or n"
                 IFSSL
             fi
         fi
@@ -151,13 +151,13 @@ SETAUTH(){
     CONFIG
     source "$config"
     if [[ "$(grep 'token=.' "$config")" ]]; then
-        echo -e '\E[37;31m'"\033[1m[error]\033[0m" "Script appears to be registered previously."
-        echo "Use -d option to delete auth and then -s to try again."
-        (($verbose)) && echo -e "\e[0;36m""Exiting.""\e[m"
+        echo -e '\E[37;31m'"\033[1m[error]\033[0m" "Script appears to be registered previously"
+        echo "Use -d option to delete auth and then -s to try again"
+        (($verbose)) && echo -e "\e[0;36m""Exiting""\e[m"
         exit 1
     else
         if ! [[ "$password" ]]; then
-            echo -e '\E[37;34m'"\033[1m[notice]\033[0m" "This will be the only time you will be asked for your password."
+            echo -e '\E[37;34m'"\033[1m[notice]\033[0m" "This will be the only time you will be asked for your password"
             echo "Your password will be stored plain in config file"
             PASSWORD
         fi
@@ -178,7 +178,7 @@ SETAUTH(){
         if [[ "$error" ]]; then
             echo -e '\E[37;31m'"\033[1m[error]\033[0m" "$error"
             echo "Check/set your login/password and try again"
-            (($verbose)) && echo -e "\e[0;36m""Exiting.""\e[m"
+            (($verbose)) && echo -e "\e[0;36m""Exiting""\e[m"
             exit 1
         fi
         unset getauth
@@ -187,11 +187,11 @@ SETAUTH(){
             echo "token=\"${token}\"">>"$config"
             unset token
             if (($verbose)); then
-                echo -e '\E[37;32m'"\033[1m[success]\033[0m" "Token saved."
+                echo -e '\E[37;32m'"\033[1m[success]\033[0m" "Token saved"
             fi
         else
-            echo -e '\E[37;31m'"\033[1m[error]\033[0m" "Getting token failed. Check/set your login/password/connection."
-            (($verbose)) && echo -e "\e[0;36m""Exiting.""\e[m"
+            echo -e '\E[37;31m'"\033[1m[error]\033[0m" "Getting token failed. Check/set your login/password/connection"
+            (($verbose)) && echo -e "\e[0;36m""Exiting""\e[m"
             exit 1
         fi
     fi
@@ -202,7 +202,7 @@ RETOKEN(){
     source "$config"
     while [[ ! $retokened ]]; do
         if ! (($quiet)) && (($verbose)); then
-            echo -e "\e[0;36m""Getting new token""\e[m"
+            echo -e "\e[0;36m""Getting new token...""\e[m"
         fi
         if ! [[ "$password" ]]; then
             PASSWORD
@@ -218,7 +218,7 @@ RETOKEN(){
         if [[ "$error" ]]; then
             echo -e '\E[37;31m'"\033[1m[error]\033[0m" "$error"
             echo "Check/set your login/password"
-            (($verbose)) && echo -e "\e[0;36m""Exiting.""\e[m"
+            (($verbose)) && echo -e "\e[0;36m""Exiting""\e[m"
             exit 1
         fi
         unset getauth
@@ -227,11 +227,11 @@ RETOKEN(){
             echo "token=\"${token}\"">>"$config"
             unset token
             if (($verbose)); then
-                echo -e '\E[37;32m'"\033[1m[success]\033[0m" "Token saved."
+                echo -e '\E[37;32m'"\033[1m[success]\033[0m" "Token saved"
             fi
         else
-            echo -e '\E[37;31m'"\033[1m[error]\033[0m" "Getting token failed. Check/set your login/password/connection."
-            (($verbose)) && echo -e "\e[0;36m""Exiting.""\e[m"
+            echo -e '\E[37;31m'"\033[1m[error]\033[0m" "Getting new token failed. Check/set your login/password/connection"
+            (($verbose)) && echo -e "\e[0;36m""Exiting""\e[m"
             exit 1
         fi
         ((retokened++))
@@ -296,16 +296,16 @@ error=$(echo "$post" | grep -iom1 '^This api requires login')
 error=$(echo "$post" | grep -iom1 '^This api requires login')
             if [[ "$error" ]]; then
                 echo -e '\E[37;31m'"\033[1m[error]\033[0m" "$error"
-                echo "Can't get post due authorization issue."
-                echo "Check/set your login/password and try to get post again."
-                (($verbose)) && echo -e "\e[0;36m""Exiting.""\e[m"
+                echo "Can't get post due authorization issue"
+                echo "Check/set your login/password and try to get post again"
+                (($verbose)) && echo -e "\e[0;36m""Exiting""\e[m"
                 exit 1
             fi
         else
             echo -e '\E[37;31m'"\033[1m[error]\033[0m" "$error"
-            echo "Can't get post due authorization issue."
-            echo "Check/set your login/password and try to get post again."
-            (($verbose)) && echo -e "\e[0;36m""Exiting.""\e[m"
+            echo "Can't get post due authorization issue"
+            echo "Check/set your login/password and try to get post again"
+            (($verbose)) && echo -e "\e[0;36m""Exiting""\e[m"
             exit 1
         fi
     fi
@@ -314,14 +314,17 @@ error=$(echo "$post" | grep -iom1 '^This api requires login')
         if ! (($urlonly)); then
             echo -e "\e[0;36m""${username}@${userhub}:""\e[m\n"
             echo "$posttxt"
+            if ! (($quiet)); then
+                echo -e "\n\e[0;36m""post url: $posturl2""\e[m"
+            fi
+        else
+            echo -e "\n\e[0;36m""$posturl2""\e[m"
         fi
-        if ! (($quiet)); then
-            echo -e "\n\e[0;36m""post url: $posturl2""\e[m"
-        fi
+            
     else
-        echo -e '\E[37;31m'"\033[1m[error]\033[0m" "No post returned, please try again or give up."
+        echo -e '\E[37;31m'"\033[1m[error]\033[0m" "No post returned, please try again or give up"
 (($verbose)) && echo -e '\E[37;31m'"\033[1m[post]\033[0m" && echo "$post"
-        (($verbose)) && echo -e "\e[0;36m""Exiting.""\e[m"
+        (($verbose)) && echo -e "\e[0;36m""Exiting""\e[m"
         exit 1
     fi
 }
@@ -332,35 +335,73 @@ POST(){
         source "$config"
         unset password
     fi
-    local postfile=$(mktemp /tmp/hzpost.XXXXXX)
-    local message=$(mktemp /tmp/hzmessage.XXXXXX)
+    if ! (($hasmsg)); then
+        local postfile=$(mktemp /tmp/hzpost.XXXXXX)
+        local message=$(mktemp /tmp/hzmessage.XXXXXX)
+    else
+        local postfile="$postfile"
+        local message="$message"
+# echo HAS MESSAGE
+# echo
+# echo verbose "$verbose"
+# echo hasmsg "$hasmsg"
+# echo postfile "$postfile"
+# echo message "$message"
+# echo tagline "$tagline"
+# echo tags "$tags"
+# echo catline "$catline"
+# cat "$message"
+# exit
+    fi
     chmod 600 "$postfile" "$message"
     local post=""
     POSTINIT(){
-        if ! [[ -t 0 ]] || (($stdin)); then
-            eval 'stdin=$(cat); echo "$stdin"' >"$message"
-        else
-            $EDITOR "$message"
+        if ! (($hasmsg)); then
+            if ! [[ -t 0 ]] || (($stdin)); then
+                eval 'stdin=$(cat); echo "$stdin"' >"$message"
+            else
+                $EDITOR "$message"
+            fi
+            msglength=$(cat "$message" | wc -m)
+            if ! (($msglength)); then
+                echo -e '\E[37;31m'"\033[1m[error]\033[0m" "The message is empty. Not posting message"
+                echo "Not deleting the file \"$message\" in case it is not empty"
+                /bin/rm -f "$postfile"
+                (($verbose)) && echo -e "\e[0;36m""Exiting""\e[m"
+                exit 1
+            fi
+            ## Remove leading blank lines
+            sed -i '/./,$!d' "$message"
         fi
-        msglength=$(cat "$message" | wc -m)
-        if ! (($msglength)); then
-            echo -e '\E[37;31m'"\033[1m[error]\033[0m" "The message is empty. Not posting message."
-            echo "Not deleting the file \"$message\" in case it is not empty"
-            /bin/rm -f "$postfile"
-            (($verbose)) && echo -e "\e[0;36m""Exiting.""\e[m"
-            exit 1
+        if [[ ! "$tagline" ]]; then
+            tagline=$(tail -n 1 "$message" | grep -io '^[[:space:]]*\?\#.*\?')
+            tags=$(echo "$tagline" | sed 's|^[[:space:]]*||; s|,||g')
         fi
-        ## Remove leading blank lines
-        sed -i '/./,$!d' "$message"
-        
-        catline=$(head -n 1 "$message" | grep -iom1 '^[[:space:]]*\?\*.*\?')
+        if [[ ! "$catline" ]]; then
+            catline=$(head -n 1 "$message" | grep -iom1 '^[[:space:]]*\?\*.*\?')
+        fi
         catsarr=($(echo "$catline" | sed 's|[\*]| |g; s|^[[:space:]]*||; s|,||g; s/\"/\\"/g'))
         for c in "${catsarr[@]}"; do category+="${c},"; done
-        tagline=$(tail -n 1 "$message" | grep -io '^[[:space:]]*\?\#.*\?')
-        tags=$(echo "$tagline" | sed 's|^[[:space:]]*||; s|,||g')
+# echo verbose "$verbose"
+# echo hasmsg "$hasmsg"
+# echo postfile "$postfile"
+# echo message "$message"
+# echo tagline "$tagline"
+# echo tags "$tags"
+# echo catline "$catline"
+# echo catsarr "${catsarr[@]}"
+# cat "$message"
+# echo
         msg=$(cat "$message")
+# echo msg "$msg"
+# echo
+# echo
         [[ "$tagline" ]] && msg=$(echo "$msg" | awk -v tl="$tagline" -F "$tagline" '{print $1}')
-        [[ "$catline" ]] && msg=$(echo "$msg" | awk -v cl="$catline" '$0 == cl {i=1;next};i && i++ <= 999')
+        if ! (($hasmsg)); then
+            [[ "$catline" ]] && msg=$(echo "$msg" | awk -v cl="$catline" '$0 == cl {i=1;next};i && i++ <= 999')
+        fi
+# echo msg "$msg"
+# exit
         title=$(echo "$msg" | head -n 1 | grep -iom1 '^[[:space:]]*\?\#[[:space:]]\+.*\?' | sed 's/\"/\\"/g')
         [[ "$title" ]] && msg=$(echo "$msg" | sed 1d)
         
@@ -369,7 +410,8 @@ POST(){
         (("$pandoc")) && markdown="pandoc -f markdown -t html"
         htmlstatus=$(echo -n "$msg" | $markdown | sed 's/\"/\\"/g' | tr -d "\n"; [[ "$tags" ]] && echo "<br><br>$tags" | sed 's/\"/\\"/g' || echo "")
         [[ "$htmlstatus" ]] && echo "htmlstatus=\"$htmlstatus\"">>"$postfile"
-        
+# echo msg "$msg"
+# exit
         source "$postfile"
 
         if (($inlineauth)); then
@@ -384,7 +426,7 @@ post=$(curl -ks -u "$login":"$password" \
             unset password
         else
             # post=$(curl -ksSi --trace-ascii - \
-post=$(curl -ksS \
+post=$(curl -ks \
              -H "Authorization: Basic $token" \
              -H "User-Agent: $useragent" \
              -X POST \
@@ -422,37 +464,38 @@ error=$(echo "$post" | grep -iom1 '^This api requires login')
 error=$(echo "$post" | grep -iom1 '^This api requires login')
             if [[ "$error" ]]; then
                 echo -e '\E[37;31m'"\033[1m[error]\033[0m" "$error"
-                echo "Can't post due authorization issue."
-                echo "Check/set your login/password and try to post again."
-                (($verbose)) && echo -e "\e[0;36m""Exiting.""\e[m"
+                echo "Can't post due authorization issue"
+                echo "Check/set your login/password and try to post again"
+                (($verbose)) && echo -e "\e[0;36m""Exiting""\e[m"
                 exit 1
             fi
         else
             echo -e '\E[37;31m'"\033[1m[error]\033[0m" "$error"
-            echo "Can't post due authorization issue."
-            echo "Check/set your login/password and try to post again."
-            (($verbose)) && echo -e "\e[0;36m""Exiting.""\e[m"
+            echo "Can't post due authorization issue"
+            echo "Check/set your login/password and try to post again"
+            (($verbose)) && echo -e "\e[0;36m""Exiting""\e[m"
             exit 1
         fi
     fi
     
     if [[ "$mid" || "$pid" ]]; then
         if ! (($quiet)); then
-            echo -e '\E[37;32m'"\033[1m[success]\033[0m" "Message posted"
+            echo -e '\E[37;32m'"\033[1m[success]\033[0m" "Message "$pid" posted"
+            echo -en "\e[0;36m""post url: ""\e[m"
 # (($verbose)) && echo -e '\E[37;32m'"\033[1m[post]\033[0m" && echo "$post"
-            if  [[ "$mid" ]]; then
-                echo -e "\e[0;36m""post url: $posturl2""\e[m"
-            else
-                GETPOST "$pid" urlonly
-            fi
+        fi
+        if  [[ "$mid" ]]; then
+            echo -e "\e[0;36m""$posturl2""\e[m"
+        else
+            GETPOST "$pid" urlonly
         fi
         /bin/rm -f "$postfile" "$message"
     else
-        echo -e '\E[37;31m'"\033[1m[error]\033[0m" "No post id returned, please try again or give up."
+        echo -e '\E[37;31m'"\033[1m[error]\033[0m" "No post id returned, please try again or give up"
 (($verbose)) && echo -e '\E[37;31m'"\033[1m[post]\033[0m" && echo "$post"
         echo "Message should still be saved in the file $message"
         /bin/rm -f "$postfile"
-        (($verbose)) && echo -e "\e[0;36m""Exiting.""\e[m"
+        (($verbose)) && echo -e "\e[0;36m""Exiting""\e[m"
         exit 1
     fi
 }
@@ -570,6 +613,7 @@ fi
 exit 0
 
 ### TODO:
+# succes pid
 # message id (mid)
 # message size limit (bash var)
 # use keyring
@@ -585,3 +629,4 @@ exit 0
 # version option
 # webdav get files
 # more errors handle
+# >&2

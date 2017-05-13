@@ -20,6 +20,7 @@ Config folder: ~/.hzclish
 * If you have hashtags enabled in your Hubzilla profile settings, words like `#tag1 #tag2 ... #tag3` (hash and text) will be parsed as hashtags (if they not starting the line). And very last line which starts with `#tag1 #tag2 ... #tag3`;
 * Top first line of post message (or second if you specified categories at first one), if it starts with `# Title of message` (one hash and space and text), will be parsed as title of the post (In Hubzilla you can define post title in separate filed);
 * Somehow, if you specified hashtags after url (even after new line) it breaks the url. Looks like Hubzilla parser issue. So here is how you should do it right: add **two spaces** after url and then hashtags
+
 > http://www.youtube.com/watch?v=MejbOFk7H6c`  `  
 >
 > \#tag1 \#tag2 \#tag3
