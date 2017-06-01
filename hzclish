@@ -175,15 +175,16 @@ SETAUTH(){
         
         source "$config"
         echo "Getting token..."
-        getauth=$(curl -ksSi -u "$login":"$password" \
+        getauth=$(curl -ksSi --trace-ascii - -u "$login":"$password" \
          -H "User-Agent: $useragent" \
         "${hub}/api/account/verify_credentials" \
          --cookie-jar "$cookie" --cookie "$cookie")
         token=$(echo "$getauth"|sed -n 's/^.*Authorization: Basic \(.*\)/\1/p')
-        error=$(echo "$getauth" | grep -io 'HTTP.*401 Unauthorized')
-        [[ "$error" ]] || error=$(echo "$post" | grep -iom1 '^This api requires login')
+        error=$(echo "$getauth" | grep -o '^HTTP.*401 Unauthorized')
+        [[ "$error" ]] || error=$(echo "$getauth" | grep -iom1 '^This api requires login')
+        [[ "$error" ]] || error=$(echo "$getauth" | grep -o '^HTTP.*50.* ')
         if [[ "$error" ]]; then
-            echo -e '\E[37;31m'"\033[1m[error]\033[0m" "$error"
+            echo -en '\E[37;31m'"\033[1m[error]: "; echo -n "$error"; echo -e "\033[0m"
             echo "Check/set your login/password/server and try again"
             (($verbose)) && echo -e "\e[0;36m""Exiting""\e[m"
             exit 1
@@ -216,17 +217,18 @@ RETOKEN(){
         if ! [[ "$password" ]]; then
             PASSWORD
         fi
-        getauth=$(curl -ksSi -u "$login":"$password" \
+        getauth=$(curl -ksSi --trace-ascii - -u "$login":"$password" \
          -H "User-Agent: $useragent" \
         "${hub}/api/account/verify_credentials" \
          --cookie-jar "$cookie" --cookie "$cookie")
         
         unset password
         token=$(echo "$getauth"|sed -n 's/^.*Authorization: Basic \(.*\)/\1/p')
-        error=$(echo "$getauth" | grep -io 'HTTP.*401 Unauthorized')
-        [[ "$error" ]] || error=$(echo "$post" | grep -iom1 '^This api requires login')
+        error=$(echo "$getauth" | grep -o '^HTTP.*401 Unauthorized')
+        [[ "$error" ]] || error=$(echo "$getauth" | grep -iom1 '^This api requires login')
+        [[ "$error" ]] || error=$(echo "$getauth" | grep -o '^HTTP.*50.* ')
         if [[ "$error" ]]; then
-            echo -e '\E[37;31m'"\033[1m[error]\033[0m" "$error"
+            echo -en '\E[37;31m'"\033[1m[error]: "; echo -n "$error"; echo -e "\033[0m"
             echo "Check/set your login/password"
             (($verbose)) && echo -e "\e[0;36m""Exiting""\e[m"
             exit 1
@@ -294,26 +296,30 @@ GETPOST(){
     GETPOSTINIT
     error=$(echo "$post" | grep -iom1 '^HTTP.*401 Unauthorized')
     [[ "$error" ]] || error=$(echo "$post" | grep -iom1 '^This api requires login')
+    [[ "$error" ]] || error=$(echo "$post" | grep -o '^HTTP.*50.*')
+    [[ "$error" ]] || error=$(echo "$post" | grep -o '^HTTP.*40.*')
     if [[ "$error" ]]; then
         if [[ $retokened != 1 ]] && [[ $inlineauth != 1 ]]; then
             if ! (($quiet)); then
-                # echo -e '\E[37;31m'"\033[1m[error]\033[0m" "$error"
+                # echo -en '\E[37;31m'"\033[1m[error]: "; echo -n "$error"; echo -e "\033[0m"
                 echo -e '\E[37;32m'"\033[1m[warning]\033[0m" "$error"
-                echo "Token not valid, requesting new one..."
+                echo "Error or invalid token, requesting new one..."
             fi
             RETOKEN
             GETPOSTINIT
             error=$(echo "$post" | grep -iom1 '^HTTP.*401 Unauthorized')
             [[ "$error" ]] || error=$(echo "$post" | grep -iom1 '^This api requires login')
+            [[ "$error" ]] || error=$(echo "$post" | grep -o '^HTTP.*50.*')
+            [[ "$error" ]] || error=$(echo "$post" | grep -o '^HTTP.*40.*')
             if [[ "$error" ]]; then
-                echo -e '\E[37;31m'"\033[1m[error]\033[0m" "$error"
+                echo -en '\E[37;31m'"\033[1m[error]: "; echo -n "$error"; echo -e "\033[0m"
                 echo "Can't get post due authorization issue"
                 echo "Check/set your login/password/server and try to get post again"
                 (($verbose)) && echo -e "\e[0;36m""Exiting""\e[m"
                 exit 1
             fi
         else
-            echo -e '\E[37;31m'"\033[1m[error]\033[0m" "$error"
+            echo -en '\E[37;31m'"\033[1m[error]: "; echo -n "$error"; echo -e "\033[0m"
             echo "Can't get post due authorization issue"
             echo "Check/set your login/password/server and try to get post again"
             (($verbose)) && echo -e "\e[0;36m""Exiting""\e[m"
@@ -457,11 +463,11 @@ POST(){
 
 # echo " export token='$token'"
 # echo " export useragent='$useragent'"
+# echo " export hub='$hub'"
 # echo " export title='$title'"
 # echo " export category='$category'"
 # echo " export channel='$channel'"
 # echo " export htmlstatus='$htmlstatus'"
-# echo " export hub='$hub'"
 # echo " export cookie='$cookie'"
 # exit
 
@@ -504,26 +510,30 @@ POST(){
     
     error=$(echo "$post" | grep -iom1 '^HTTP.*401 Unauthorized')
     [[ "$error" ]] || error=$(echo "$post" | grep -iom1 '^This api requires login')
+    [[ "$error" ]] || error=$(echo "$post" | grep -o '^HTTP.*50.*')
+    [[ "$error" ]] || error=$(echo "$post" | grep -o '^HTTP.*40.*')
     if [[ "$error" ]]; then
         if ! (($retokened)) && ! (($inlineauth)); then
             if ! (($quiet)); then
-                # echo -e '\E[37;31m'"\033[1m[error]\033[0m" "$error"
+                # echo -en '\E[37;31m'"\033[1m[error]: "; echo -n "$error"; echo -e "\033[0m"
                 echo -e '\E[37;32m'"\033[1m[warning]\033[0m" "$error"
-                echo "Token not valid, requesting new one..."
+                echo "Error or invalid token, requesting new one..."
             fi
             RETOKEN
             POSTINIT
             error=$(echo "$post" | grep -iom1 '^HTTP.*401 Unauthorized')
             [[ "$error" ]] || error=$(echo "$post" | grep -iom1 '^This api requires login')
+            [[ "$error" ]] || error=$(echo "$post" | grep -o '^HTTP.*50.*')
+            [[ "$error" ]] || error=$(echo "$post" | grep -o '^HTTP.*40.*')
             if [[ "$error" ]]; then
-                echo -e '\E[37;31m'"\033[1m[error]\033[0m" "$error"
+                echo -en '\E[37;31m'"\033[1m[error]: "; echo -n "$error"; echo -e "\033[0m"
                 echo "Can't post due authorization issue"
                 echo "Check/set your login/password/server and try to post again"
                 (($verbose)) && echo -e "\e[0;36m""Exiting""\e[m"
                 exit 1
             fi
         else
-            echo -e '\E[37;31m'"\033[1m[error]\033[0m" "$error"
+            echo -en '\E[37;31m'"\033[1m[error]: "; echo -n "$error"; echo -e "\033[0m"
             echo "Can't post due authorization issue"
             echo "Check/set your login/password/server and try to post again"
             (($verbose)) && echo -e "\e[0;36m""Exiting""\e[m"
@@ -545,7 +555,7 @@ POST(){
         /bin/rm -f "$postfile" "$message"
     else
         echo -e '\E[37;31m'"\033[1m[error]\033[0m" "No post id returned, please try again or give up"
-(($verbose)) && echo -e '\E[37;31m'"\033[1m[post]:\n$post\033[0m"
+(($verbose)) && echo -e '\E[37;31m'"\033[1m[post]:\n"; echo -n "$post"; echo -e "\033[0m"
         echo "Message should still be saved in the file $message"
         /bin/rm -f "$postfile"
         (($verbose)) && echo -e "\e[0;36m""Exiting""\e[m"
