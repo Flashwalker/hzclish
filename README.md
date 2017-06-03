@@ -1,5 +1,9 @@
 # hzclish - CLI bash script for posting/reading on [Hubzilla](https://project.hubzilla.org/) (ex Red Matrix) hub
 
+### Looks like won't work with last Hubzilla versions.
+Works on Hubzilla 2.2  
+**TODO: rewrite with Zot API**
+
 ### Dependencies:
 
 * [curl](https://curl.haxx.se/) (ubuntu updates/main, security/main, /main repos has this)
