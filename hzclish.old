@@ -85,11 +85,11 @@ EOF
 
 CONFIG(){
     # Check for config file and create it if it does not exist
-    if ! (($custconfig)); then
+    if ! (($custconfig)) && ! (($setnew)); then
         confdir="$dotdir"
         [[ -f "${confdir}/defaultconfig" ]] && source "${confdir}/defaultconfig"
     else
-        ! (($quiet)) && (($verbose)) && echo -e "\e[0;36m""Using config: $config""\e[m"
+        ! (($quiet)) && (($verbose)) && [[ $config ]] && echo -e "\e[0;36m""Using config: $config""\e[m"
         [[ -f "$config" ]] && confdir=$(dirname "$config")
         [[ -d "$confdir" ]] || confdir="$dotdir"
         if [[ -f "$config" ]]; then
@@ -153,7 +153,17 @@ CONFIG(){
         if ! (($custconfig)); then
             config="${confdir}/${zid}.config"
         fi
-        if [[ ! -f "${confdir}/defaultconfig" || "$(cat "${confdir}/defaultconfig" | wc -m)" == 0 ]] || (($setdefconf)); then
+
+        # if [[ "$(grep 'token=.\+' "$config")" ]]; then
+        source "$config"
+        if [[ "$token" ]]; then
+            echo -e '\e[37;31m'"\e[1m[error]\e[0m" "Script appears to be registered previously" >&2
+            echo "Use -D option to delete auth and then -s to try again" >&2
+            (($verbose)) && echo -e "\e[0;36m""Exiting""\e[m"
+            exit 1
+        fi
+
+        if [[ ! -f "${confdir}/defaultconfig" || "$(wc -m "${confdir}/defaultconfig"|cut -d ' ' -f 1)" == 0 ]] || (($setdefconf)); then
             ! (($quiet)) && (($verbose)) && echo -e "\e[0;36m""Setting default config: $config""\e[m"
             echo "config=\"$config\"">"${confdir}/defaultconfig" && [[ -f "${confdir}/defaultconfig" ]] && chmod 600 "${confdir}/defaultconfig"
         fi
@@ -213,63 +223,56 @@ fi
 SETAUTH(){
     CONFIG
     source "$config"
-    if [[ "$(grep 'token=.' "$config")" ]]; then
-        echo -e '\e[37;31m'"\e[1m[error]\e[0m" "Script appears to be registered previously"
-        echo "Use -d option to delete auth and then -s to try again"
-        (($verbose)) && echo -e "\e[0;36m""Exiting""\e[m"
-        exit 1
-    else
-        if ! [[ "$password" ]]; then
-            echo -e '\e[37;34m'"\e[1m[notice]\e[0m" "This will be the only time you will be asked for your password"
-            echo "Your password will be stored plain in config file"
-            PASSWORD
-        fi
-        sed -i '/password=/d' "$config"
-        echo password=\"$(sed 's/\"/\\"/g'<<<"$password")\">>"$config"
-        if (($verbose)); then
-            echo -e "\e[0;36m""Password have been saved to $config""\e[m"
-        fi
-        
-        source "$config"
-        echo "Getting token..."
-        getauth=$(curl -ksSi --trace-ascii - -u "${login}:$password" \
-         -H "User-Agent: $useragent" \
-        "${hub}/api/account/verify_credentials" \
-         --cookie-jar "${confdir}/$cookie" --cookie "${confdir}/$cookie")
-        token=$(echo "$getauth"|sed -n 's/^.*Authorization: Basic \(.*\)/\1/p1')
+    if ! [[ "$password" ]]; then
+        echo -e '\e[37;34m'"\e[1m[notice]\e[0m" "This will be the only time you will be asked for your password"
+        echo "Your password will be stored plain in config file"
+        PASSWORD
+    fi
+    sed -i '/password=/d' "$config"
+    echo password=\"$(sed 's/\"/\\"/g'<<<"$password")\">>"$config"
+    if (($verbose)); then
+        echo -e "\e[0;36m""Password have been saved to $config""\e[m"
+    fi
+    
+    source "$config"
+    echo "Getting token..."
+    getauth=$(curl -ksSi --trace-ascii - -u "${login}:$password" \
+     -H "User-Agent: $useragent" \
+    "${hub}/api/account/verify_credentials" \
+     --cookie-jar "${confdir}/$cookie" --cookie "${confdir}/$cookie")
+    token=$(echo "$getauth"|sed -n 's/^.*Authorization: Basic \(.*\)/\1/p1')
 
-        # unset getauth
-        if [[ "$token" ]]; then
-            sed -i '/token=/d' "$config"
-            echo "token=\"${token}\"">>"$config"
-            # unset token
-            if (($verbose)); then
-                echo -e '\e[37;32m'"\e[1m[success]\e[0m" "Token saved"
-            fi
-        else
-            echo -e '\e[37;31m'"\e[1m[error]\e[0m" "Getting token failed. Check/set your login/password/connection"
+    # unset getauth
+    if [[ "$token" ]]; then
+        sed -i '/token=/d' "$config"
+        echo "token=\"${token}\"">>"$config"
+        # unset token
+        if (($verbose)); then
+            echo -e '\e[37;32m'"\e[1m[success]\e[0m" "Token saved"
+        fi
+    else
+        echo -e '\e[37;31m'"\e[1m[error]\e[0m" "Getting token failed. Check/set your login/password/connection"
 (($verbose)) && echo -e '\e[37;31m'"\e[1m[post]\e[0m" && echo "$getauth"
 unset getauth
-            (($verbose)) && echo -e "\e[0;36m""Exiting""\e[m"
-            exitstatus=1
-        fi
+        (($verbose)) && echo -e "\e[0;36m""Exiting""\e[m"
+        exitstatus=1
+    fi
 
-        local error=''
-        error=$(echo "$getauth" | grep -io '^This api requires login')
-        [[ "$error" ]] || error=$(echo "$getauth" | grep -o '^HTTP/[[:digit:]]\.[[:digit:]] \+[3-9]\{1,3\}.*')
-        if [[ "$error" ]]; then
-            [[ "$token" ]] && echo 'but'
-            unset token
-            echo -en '\e[37;31m'"\e[1m[error] \e[0m"; echo -en "\e[0;31m"; echo -n "$error"; echo -e "\e[m"
-            echo "Check/set your login/password/server and try again"
-            (($verbose)) && echo -e "\e[0;36m""Exiting""\e[m"
-            exitstatus=1
-        fi
+    local error=''
+    error=$(echo "$getauth" | grep -io '^This api requires login')
+    [[ "$error" ]] || error=$(echo "$getauth" | grep -o '^HTTP/[[:digit:]]\.[[:digit:]] \+[3-9]\{1,3\}.*')
+    if [[ "$error" ]]; then
+        [[ "$token" ]] && echo 'but'
+        unset token
+        echo -en '\e[37;31m'"\e[1m[error] \e[0m"; echo -en "\e[0;31m"; echo -n "$error"; echo -e "\e[m"
+        echo "Check/set your login/password/server and try again"
+        (($verbose)) && echo -e "\e[0;36m""Exiting""\e[m"
+        exitstatus=1
+    fi
 
-        if (($exitstatus)); then
-            (($verbose)) && echo -e "\e[0;36m""Exiting""\e[m"
-            exit $exitstatus
-        fi
+    if (($exitstatus)); then
+        (($verbose)) && echo -e "\e[0;36m""Exiting""\e[m"
+        exit $exitstatus
     fi
 }
 
@@ -468,7 +471,7 @@ POST(){
             else
                 $EDITOR "$message"
             fi
-            msglength=$(cat "$message" | wc -m)
+            msglength=$(wc -m "$message"|cut -d ' ' -f 1)
             if ! (($msglength)); then
                 echo -e '\e[37;31m'"\e[1m[error]\e[0m" "The message is empty. Not posting message"
                 echo "Not deleting the file \"$message\" in case it is not empty"
@@ -639,7 +642,12 @@ POST(){
     
     if [[ "$mid" || "$pid" ]]; then
         if ! (($quiet)); then
-            echo -e '\e[37;32m'"\e[1m[success]\e[0m" "Message "$pid" posted"
+            if [[ "$pid" ]]; then
+                local id="$pid"
+            elif [[ "$mid" ]]; then
+                local id="$mid"
+            fi
+            echo -e '\e[37;32m'"\e[1m[success]\e[0m" "Message "$id" posted"
             echo -en "\e[0;36m""post url: ""\e[m"
 # (($verbose)) && echo -e '\e[37;32m'"\e[1m[post]:\n$post\e[0m"
         fi
@@ -661,7 +669,7 @@ POST(){
 
 # DELETE CONFIG & COOKIE
 DELETE(){
-        [[ "$config" ]] && source "$config" && unset password
+    [[ "$config" ]] && source "$config" && unset password
     ! (($quiet)) && echo Deleting: cookie: "${confdir}/${zid}.cookie", config: "$config"
     [[ "$confdir" && "$zid" ]] && [[ -f "${confdir}/${zid}.cookie" ]] && /bin/rm -f "${confdir}/${zid}.cookie"
     [[ "$config" ]] && [[ -f "$config" ]] && /bin/rm -f "$config"
@@ -729,6 +737,7 @@ do
       ;;
     s)
       exe=1
+      setnew=1
       SETAUTH
       ;;
     S)
@@ -803,9 +812,9 @@ fi
 exit 0
 
 ### TODO:
-# rewrite with Zot API (due currently won't works with fresh Huubzilla)
-# read by mid
 # message size limit (bash var)
+# read by mid
+# private post
 # use keyring
 # delete post
 # comment post

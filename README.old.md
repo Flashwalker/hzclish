@@ -4,7 +4,7 @@
 
 ## Dependencies:
 
-See: [INSTALL.md](dependencies/INSTALL.md)
+See: [dependencies/INSTALL.md](dependencies/INSTALL.md)
 
 * [curl](https://curl.haxx.se/)
 * [jq](https://stedolan.github.io/jq/)
