@@ -1,5 +1,7 @@
 # hzclish - CLI bash script for posting/reading on [Hubzilla](https://project.hubzilla.org/) (ex Red Matrix) hub
 
+## It's obsolete! Works only with Hubzilla hubs with  Twitter API plugin enabled.
+
 ## Dependencies:
 
 See: [INSTALL.md](src/master/dependencies/INSTALL.md)
@@ -8,16 +10,9 @@ See: [INSTALL.md](src/master/dependencies/INSTALL.md)
 * [jq](https://stedolan.github.io/jq/)
 * grep, sed, awk, tr, mkdir, mktemp, rm, wc, which (normally GNU/linux has this)
 
-For markdown to bbcode:
+For markdown:
 
-* [md2bbc.pl](https://gist.github.com/Flashwalker/360e8615bff1b9b322e0096fe92680ab)
-* libtext-markdown-perl
-* libtext-typography-perl (optional)
-
- &nbsp;or:
-
-* [pandoc](http://pandoc.org/)
-* [bbcode writer](https://github.com/lilydjwg/2bbcode)
+* [markdown][mdown] or  libtext-markdown-perl or [pandoc](http://pandoc.org/) or [discount](https://github.com/Orc/discount)
 
 
 ## Usage:
@@ -30,9 +25,7 @@ Config folder: ~/.hzclish
 
 ## Notice:
 
-* Post message will be converted via [markdown][mdown] to bbcode, so you can use it syntax (use `-P` or `-m` options to change markdown engine)
-* If you prefer to post in bbcode (Hubzilla default) or just as plain text, use `-B` option, so message won't be markdowned
-* If you prefer to post in html, use `-H` option, so message won't be markdowned
+* Post message will be converted by [markdown][mdown], so you can use it syntax, (use `-P` or `-m` options to change markdown engine)
 * Don't forget to add two **spaces** for [markdown][mdown] line breaks
 * If you have categories enabled in your Hubzilla profile settings, the top first line of post message, if it starts with ` *cat1 *cat2 ... *cat3` (*asterisk and text*), will be parsed as post categories (*It's like tags, but categories*)
 * If you have hashtags enabled in your Hubzilla profile settings, words like ` #tag1 #tag2 ... #tag3` (*hash \+ text*) will be parsed as hashtags (*if they not starting the line*). And very last line of post message with ` #tag1 #tag2 ... #tag3` will be hashtags too, even if it starts the line
@@ -44,11 +37,5 @@ Config folder: ~/.hzclish
 > http://www.youtube.com/watch?v=MejbOFk7H6c`  `  
 >
 > \#tag1 \#tag2 \#tag3
-
-## Changelog
-
-v2.0:
-
-- Rewritten with Zot API. Twitter API now: hzclish.old
 
 [mdown]: http://daringfireball.net/projects/markdown/syntax
