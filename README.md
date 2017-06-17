@@ -8,7 +8,7 @@ See: [dependencies/INSTALL.md](dependencies/INSTALL.md)
 * [jq](https://stedolan.github.io/jq/)
 * grep, sed, awk, tr, mkdir, mktemp, rm, wc, which (normally GNU/linux has this)
 
-For markdown to bbcode:
+**For markdown to bbcode:**
 
 * [md2bbc.pl](https://gist.github.com/Flashwalker/360e8615bff1b9b322e0096fe92680ab)
 * libtext-markdown-perl

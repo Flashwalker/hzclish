@@ -1,6 +1,6 @@
-# hzclish - CLI bash script for posting/reading on [Hubzilla][hubzilla] (ex Red Matrix) hub
+# hzclish.old - CLI bash script for posting/reading on [Hubzilla][hubzilla] (ex Red Matrix) hub
 
-## It's obsolete! Works only with [Hubzilla][hubzilla] hubs with  Twitter API plugin enabled.
+## This version works only with Hubzilla hubs with **Twitter API** plugin enabled.
 
 ## Dependencies:
 

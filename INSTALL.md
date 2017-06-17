@@ -1,6 +1,8 @@
 # Install script:
 mkdir -p ~/bin && install -m 755 hzclish ~/bin/
 
+## Install old (Twitter API) script:
+mkdir -p ~/bin && install -m 755 hzclish.old ~/bin/
 
 # Install dependencies:
 
