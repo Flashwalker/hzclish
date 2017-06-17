@@ -9,6 +9,7 @@ sudo apt-get install jq
 ### or:
 mkdir -p ~/bin && install -m 755 jq ~/bin/
 
+
 ## For markdown:
 
 ### Install markdown:
