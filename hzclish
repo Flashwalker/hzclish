@@ -124,20 +124,24 @@ CONFIG(){
         read -p "Enter hub domain (example.com): " domain
         domain=$(echo "${domain%/*}" | sed 's|^[[:space:]]*https\?://||g')
         if ! (($sslsetted)); then
-            IFSSL(){
-                read -p "Does your hub use SSL? (y/n) " sslresponse
-            }
-            IFSSL
-            if [[ $sslresponse == [Nn] ]]; then
-                ssl=0
-                hub="http://$domain"
-            elif [[ $sslresponse == [Yy] ]]; then
-                ssl=1
-                hub="https://$domain"
-            else
-                echo "Response not valid, please answer y or n"
-                IFSSL
-            fi
+            validsslres=0
+            sslres=y
+            while ! (($validsslres)); do
+                read -n 1 -p "Does your hub use SSL? (Y/n): " sslres
+                if [[ "${sslres,,}" == [Nn] ]]; then
+                    validsslres=1
+                    ssl=0
+                    hub="http://$domain"
+                elif [[ "${sslres,,}" == [Yy] || -z "$sslres" ]]; then
+                    validsslres=1
+                    ssl=1
+                    hub="https://$domain"
+                else
+                    validsslres=0
+                    echo -e "\e[0;31m\nResponse not valid, please answer y or n\e[m"
+                fi
+            done
+            echo
         fi
         if (($ssl)); then
             hub="https://$domain"
@@ -559,6 +563,7 @@ POST(){
 # echo catline "$catline"
 # exit
         if ! (($hasmsg)) && ! (($tagtocat)) && (($hascatline)); then
+            # FIXME: slow part
             [[ "$catline" ]] && echo "$(awk -v cl="$catline" '$0 == cl {i=1;next};i && i++ <= 999' "$msgbody")" >"$msgbody"
             ## Delete leading blank lines
             sed -i '/./,$!d' "$msgbody"
