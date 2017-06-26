@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # hzclish - Hubzilla (ex Red Matrix) cli bash script.
-# Version 2.0
+# Version 2.1
 # Source: https://notabug.org/uzver/hzclish
 #
 # License: WTFPL2 http://wtfpl2.com/
@@ -498,7 +498,7 @@ POST(){
     local mid='' pid='' success='' error='' posturl='' posturl2=''
     local post=$(mktemp /tmp/hzpost.XXXXXX)
     local postbody=$(mktemp /tmp/hzpostbody.XXXXXX)
-    POSTINIT(){
+
         if ! (($hasmsg)); then
             if ! [[ -t 0 ]] || (($stdin)); then
                 eval 'stdin=$(cat); echo "$stdin"' >"$message"
@@ -623,6 +623,7 @@ POST(){
 # echo " export htmlstatus='$htmlstatus'"
 # echo " export cookie='$cookie'"
 # exit
+    POSTINIT(){
         if (($inlineauth)); then
             ! [[ "$password" ]] && PASSWORD
             (($verbose)) && echo -e "\e[0;36m""Posting...""\e[m"
@@ -683,7 +684,8 @@ POST(){
                 if ! (($quiet)); then
                     # echo -en '\e[37;31m'"\e[1m[error] \e[0m" >&2; echo -en "\e[0;31m" >&2; echo -n "$error" >&2; echo -e "\e[m" >&2
                     # echo -e '\e[37;32m'"\e[1m[warning] \e[0m" "$error" >&2
-                    echo -en "\e[0;33m[warning] \e[m" >&2; echo "$error" >&2
+                    # echo -en "\e[0;33m[warning] \e[m" >&2; echo "$error" >&2
+                    echo -en '\e[37;32m'"\e[1m[warning] \e[0m" >&2; echo "$error" >&2
                     echo "Error or invalid token, requesting new one..." >&2
                 fi
                 RETOKEN
