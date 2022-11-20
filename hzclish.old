@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # hzclish - Hubzilla (ex Red Matrix) cli bash script.
-# Version 1.2
+# Version 1.2 (legacy. Wont be updated)
 # Source: https://notabug.org/uzver/hzclish
 #
 # License: WTFPL2 http://wtfpl2.com/
@@ -22,54 +22,62 @@ useragent='Mozilla/5.0 (Windows NT 6.1; rv:41.0) Gecko/20100101 Firefox/41.0'
 USAGE(){
     exec=$(basename "$0"); [[ "$exec" ]] || exec="${0##*/}"
     cat << EOF
-  $exec - CLI bash wrapper script for the Hubzilla (Red Matrix) API.
+  $exec - CLI bash wrapper script for the Hubzilla (Red Matrix) twitter API.
 
   USAGE: $exec [OPTIONS] [-u LOGIN:DOMAIN[:PASSWORD]] [<<<"MESSAGE"]
     
   OPTIONS:
-    -c config                  Specify config file
-                                (you can use different configs for different accounts)
-    -d config                  Specify config file and set it as default auth
-    -D                         Delete config and cookie files
-    -g ID                      Get post of given ID
-    -h, --help                 Show this help
-    -i                         Post from stdin
-    -m <str>                   Set markdown engine (overwrites: -P)
-    -p                         Post message
-    -P                         Use pandoc instead of markdown
-                                (short for: -m "pandoc -f markdown_strict+footnotes+definition_lists+hard_line_breaks -t html")
-    -q                         Less verbose printing
-    -r                         Renew auth token
-    -s                         Set authentification (save login, password)
-    -S yes|no                  Use or not https (default: yes) (useful for inline auth: -u)
-    -t                         Convert very last line with hashtags of message to categories,
-                                and post with both same hashtags and categories
-    -T                         Convert very last line with hashtags of message to categories,
-                                and drop hashtags, post only with categories
-    -u LOGIN:DOMAIN[:PASSWORD] Specify auth inline, e.g.: "inbox@example.com:hubdomain.com:password", or:
-        "channel@hubdomain.com:password", or:
-        "channel@hubdomain.com"
-                                (use it if you do not want to save auth)
-                                (implies not use with: -c, -D, -r, -s)
-    -v                         Verbose mode
+    -c config                   Specify config file.
+                                 (use different configs for different accounts).
+    -d                          Set config file as default auth (requires: -s|-g|-p).
+    -D                          Delete config and cookie files.
+    -g ID                       Get post of given ID.
+    -h, --help                  Show this help.
+    -i                          Post from standart input.
+    -m <str>                    Set your custom markdown engine (overwrites: -P).
+    -p                          Post the message.
+    -P                          Use pandoc instead of markdown
+                                 (it's short for:
+                                   -m "pandoc -f markdown_strict+footnotes+definition_lists+hard_line_breaks -t html").
+    -q                          Less verbose printing.
+    -R                          Renew auth token.
+    -s                          Set new authentification (save login, password).
+    -S yes|no                   Use or not https (default: yes) (useful for inline auth: -u).
+    -t                          Convert very last line (of your post) with hashtags to categories,
+                                 and post with the same hashtags and categories.
+    -T                          Convert very last line (of your post) with hashtags to categories,
+                                 and drop hashtags. Post only with categories.
+    -u LOGIN:DOMAIN[:PASSWORD]  Specify auth inline, e.g.:
+                                 "inbox@example.com:hubdomain.com:password",
+                                 or:
+                                  "channelname@hubdomain.com:password", or:
+                                  "channelname@hubdomain.com"
+                                 (use it if you do not want to save auth)
+                                 (implies not to use with: -c, -D, -r, -s).
+    -v                          Verbose mode.
     
     Notice: For now length of message limited by bash variable size limit.
 
   EXAMPLES:
-    Set authentification to config file:
-      $exec -vs
-     or to custom place:
-      $exec -vc myConfig -s   # save in "$dotdir"
-      $exec -vc ~/myConfig -s   # save in home directory
-     or to custom place and set it default:
-      $exec -vd myNewDefaultConfig -s   # save in "$dotdir"
-      $exec -vd ~/myNewDefaultConfig -s   # save in home directory
+    Save new authentification to config file and set it default:
+      $exec -s
+     or save new auth and set it default:
+      $exec -vds                               # verbose
+     or to custom place or name:
+      $exec -vc ~/myConfig -s                  # save to myConfig file in home
+                                                  directory
+      $exec -vc myConfig -s                    # save to "$dotdir"/myConfig file
+     or to custom place or name and set default:
+      $exec -vdc ~/myConfig -s                 # save to myConfig file in home
+                                                  directory
+      $exec -vdc myConfig -s                   # save to "$dotdir"/myConfig file
 
     Post message:
       $exec
       $exec -vp
-      $exec -c myConfig   # with custom config
-      $exec -d myNewDefaultConfig   # with custom config & set it default
+      $exec -c myConfig                        # with custom config
+      $exec -dc myNewDefaultConfig             # with custom config & set it
+                                                default
     Post message from stdin:
       $exec <<<"Hello world!"
       echo "Hello world!" | $exec
@@ -78,20 +86,30 @@ USAGE(){
     Read post by id:
       $exec -g 1234567
       $exec -qg 1234567
-      $exec -c myConfig -g 1234567   # with custom config
-      $exec -d myNewDefaultConfig -g 1234567   # with custom config & set it default
+      $exec -c myConfig -g 1234567             # with custom config
+      $exec -dc myNewDefaultConfig -g 1234567  # with custom config & set it
+                                                  default
 EOF
 }
 
 CONFIG(){
-    # Check for config file and create it if it does not exist
+    # Check for config file and create new one if it does not exist
     if ! (($custconfig)) && ! (($setnew)); then
         confdir="$dotdir"
-        [[ -f "${confdir}/defaultconfig" ]] && source "${confdir}/defaultconfig"
+        if  [[ -f "${confdir}/defaultconfig" ]]; then
+            source "${confdir}/defaultconfig"
+        else
+            echo -e '\e[37;31m'"\e[1m[error]\e[0m" "Can't find defaultconfig" >&2
+            exitstatus=1
+        fi
     else
         ! (($quiet)) && (($verbose)) && [[ $config ]] && echo -e "\e[0;36m""Using config: $config""\e[m"
+        # Find directory of config file if '$config' is file and set it as config directory '$confdir'
         [[ -f "$config" ]] && confdir=$(dirname "$config")
+        # In case '$config' is zid:
+        #  set config directory to script dot directory '$dotdir'
         [[ -d "$confdir" ]] || confdir="$dotdir"
+        # Create path to config file and set it as '$config'
         if [[ -f "$config" ]]; then
             true
         else
@@ -105,16 +123,17 @@ CONFIG(){
 # echo config "$config"
 # exit
     fi
+
     if [[ -f "$config" ]]; then
         ! (($quiet)) && (($verbose)) && echo -e "\e[0;36m""Using config: $config""\e[m"
         # (($custconfig)) && confdir=$(dirname "$config")
         if (($setdefconf)); then
-            ! (($quiet)) && (($verbose)) && echo -e "\e[0;36m""Setting default config: $config""\e[m"
+            ! (($quiet)) && (($verbose)) && echo -e "\e[0;36m""Setting default config to: $config""\e[m"
             echo "config=\"$config\"">"${confdir}/defaultconfig" && [[ -f "${confdir}/defaultconfig" ]] && chmod 600 "${confdir}/defaultconfig"
         fi
     else
         mkdir -p "$confdir" && chmod 700 "$confdir"
-        echo -e '\e[37;34m'"\e[1m[notice]\e[0m" "No config file found! Let's create one"
+        echo -e '\e[37;34m'"\e[1m[notice]\e[0m" "Creating new config file:"
         read -p "Enter hub domain (example.com): " domain
         domain=$(echo "${domain%/*}" | sed 's|^[[:space:]]*https\?://||g')
         if ! (($sslsetted)); then
@@ -157,18 +176,16 @@ CONFIG(){
         if ! (($custconfig)); then
             config="${confdir}/${zid}.config"
         fi
-
         # if [[ "$(grep 'token=.\+' "$config")" ]]; then
-        source "$config"
+        [[ -f "$config" ]] && source "$config"
         if [[ "$token" ]]; then
             echo -e '\e[37;31m'"\e[1m[error]\e[0m" "Script appears to be registered previously" >&2
-            echo "Use -D option to delete auth and then -s to try again" >&2
+            echo "        Use: "$exec" '-D ${zid}' to delete auth and then '-s' option to try again" >&2
             (($verbose)) && echo -e "\e[0;36m""Exiting""\e[m"
             exit 1
         fi
-
-        if [[ ! -f "${confdir}/defaultconfig" || "$(wc -m "${confdir}/defaultconfig"|cut -d ' ' -f 1)" == 0 ]] || (($setdefconf)); then
-            ! (($quiet)) && (($verbose)) && echo -e "\e[0;36m""Setting default config: $config""\e[m"
+        if (($setdefconf)) || [[ ! -f "${confdir}/defaultconfig" || "$(wc -m "${confdir}/defaultconfig"|cut -d ' ' -f 1)" == 0 ]]; then
+            ! (($quiet)) && (($verbose)) && echo -e "\e[0;36m""Setting default config to: $config""\e[m"
             echo "config=\"$config\"">"${confdir}/defaultconfig" && [[ -f "${confdir}/defaultconfig" ]] && chmod 600 "${confdir}/defaultconfig"
         fi
         cookie="${zid}.cookie"
@@ -228,7 +245,7 @@ SETAUTH(){
     CONFIG
     source "$config"
     if ! [[ "$password" ]]; then
-        echo -e '\e[37;34m'"\e[1m[notice]\e[0m" "This will be the only time you will be asked for your password"
+        echo -e '\e[37;34m'"\e[1m[notice]\e[0m" "This is the only time you asked for your password"
         echo "Your password will be stored plain in config file"
         PASSWORD
     fi
@@ -240,11 +257,11 @@ SETAUTH(){
     
     source "$config"
     echo "Getting token..."
-    getauth=$(curl -ksSi --trace-ascii - -u "${login}:$password" \
+    getauth=$(curl -ksSi --trace-ascii - -u "${login}:${password}" \
      -H "User-Agent: $useragent" \
     "${hub}/api/account/verify_credentials" \
      --cookie-jar "${confdir}/$cookie" --cookie "${confdir}/$cookie")
-    token=$(echo "$getauth"|sed -n 's/^.*Authorization: Basic \(.*\)/\1/p1')
+    token=$(echo "$getauth"|sed -n 's/^.*[aA]uthorization: [Bb]asic \(.*\)/\1/p1')
 
     # unset getauth
     if [[ "$token" ]]; then
@@ -257,7 +274,7 @@ SETAUTH(){
     else
         echo -e '\e[37;31m'"\e[1m[error]\e[0m" "Getting token failed. Check/set your login/password/connection"
 (($verbose)) && echo -e '\e[37;31m'"\e[1m[post]\e[0m" && echo "$getauth"
-unset getauth
+        unset getauth
         (($verbose)) && echo -e "\e[0;36m""Exiting""\e[m"
         exitstatus=1
     fi
@@ -297,7 +314,7 @@ RETOKEN(){
         body=$(echo -n "$getauth"|grep -iom1 '{\".*[^\]\(["}]\|\]\)}')
         [[ "$body" ]] || body=$(echo -n "$getauth"|grep -i 'error')
         unset password
-        token=$(echo "$getauth"|sed -n 's/^.*Authorization: Basic \(.*\)/\1/p1')
+        token=$(echo "$getauth"|sed -n 's/^.*[aA]uthorization: [Bb]asic \(.*\)/\1/p1')
 
         # unset getauth
         if [[ "$token" ]]; then
@@ -485,8 +502,11 @@ POST(){
             fi
             ## Delete leading blank lines
             sed -i '/./,$!d' "$message"
+
+            msglines=$(wc -l "$message"|cut -d ' ' -f 1)
         fi
-        if [[ ! "$tagline" ]]; then
+        # Make tags only if message length more than 1 line
+        if [[ ! "$tagline" ]] && [[ "$msglines" -gt 1 ]]; then
             tagline=$(tail -n 1 "$message" | grep -io '^[[:space:]]*\?\#.*\?')
              [[ "$tagline" ]] && hastagline="$tagline"
             ! (($catonly)) && tags=$(echo "$tagline" | sed 's|^[[:space:]]*||; s|,||g')
@@ -674,10 +694,32 @@ POST(){
 
 # DELETE CONFIG & COOKIE
 DELETE(){
-    [[ "$config" ]] && source "$config" && unset password
-    ! (($quiet)) && echo Deleting: cookie: "${confdir}/${zid}.cookie", config: "$config"
-    [[ "$confdir" && "$zid" ]] && [[ -f "${confdir}/${zid}.cookie" ]] && /bin/rm -f "${confdir}/${zid}.cookie"
-    [[ "$config" ]] && [[ -f "$config" ]] && /bin/rm -f "$config"
+#    [[ "$config" ]] && source "$config" && unset password
+#    ! (($quiet)) && echo Deleting: cookie: "${confdir}/${zid}.cookie", config: "$config"
+#    [[ "$confdir" && "$zid" ]] && [[ -f "${confdir}/${zid}.cookie" ]] && /bin/rm -f "${confdir}/${zid}.cookie"
+#    [[ "$config" ]] && [[ -f "$config" ]] && /bin/rm -f "$config"
+    ! (($quiet)) && (($verbose)) && [[ $zid ]] && echo -e "\e[0;36m""Using config: $zid""\e[m"
+    # Find directory of config file if '$config' is file and set it as config directory '$confdir'
+    [[ -f "$zid" ]] && local confdir=$(dirname "$zid")
+    # In case '$config' is zid:
+    #  set config directory to script dot directory '$dotdir'
+    [[ -d "$confdir" ]] || local confdir="$dotdir"
+    # Create path to config file and set it as '$config'
+    if [[ -f "$zid" ]]; then
+        true
+    else
+        if [[ -f "${confdir}/${zid}" ]]; then
+            local config="${confdir}/$zid"
+            local cookie="${confdir}/${zid%.config}.cookie"
+        elif [[ -f "${confdir}/${zid}.config" ]]; then
+            local config="${confdir}/${zid}.config"
+            local cookie="${confdir}/${zid%.config}.cookie"
+        fi
+    fi
+    ! (($quiet)) && echo Deleting cookie: "$cookie"
+    [[ -f "$cookie" ]] && /bin/rm -f "$cookie"
+    ! (($quiet)) && echo Deleting config: "$config"
+    [[ -f "$config" ]] && /bin/rm -f "$config"
 }
 
 if [[ $# -lt 1 ]]; then
@@ -689,7 +731,7 @@ elif [[ "$1" == '--help' ]]; then
 fi
 
 # RUN OPTIONS
-while getopts ":c:d:Dg:him:pPqrsS:tTu:v" OPTION
+while getopts ":c:d:D:g:him:pPqrsS:tTu:v" OPTION
 do
   case $OPTION in
     c)
@@ -699,15 +741,15 @@ do
       fi
       ;;
     d)
-      if [[ "$OPTARG" ]]; then
-        config="$OPTARG"
-        custconfig=1
-      fi
+      #if [[ "$OPTARG" ]]; then
+      #  config="$OPTARG"
+      #  custconfig=1
+      #fi
       setdefconf=1
-      # echo "$config"
       ;;
     D)
       exe=1
+      zid="$OPTARG"
       DELETE
       ;;
     g)
@@ -743,6 +785,7 @@ do
     s)
       exe=1
       setnew=1
+      setdefconf=1
       SETAUTH
       ;;
     S)
@@ -818,6 +861,7 @@ exit 0
 
 ### TODO:
 # message size limit (bash var)
+# read post + comments
 # read by mid
 # private post
 # use keyring
@@ -827,10 +871,9 @@ exit 0
 # reshare post
 # like, dislike
 # attach image to post
-# read post + comments
 # notifications
 # debug
 # version option
-# webdav get files
+# webdav files
 # more errors handle
 # >&2

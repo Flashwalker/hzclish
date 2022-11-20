@@ -1,13 +1,18 @@
 #!/bin/bash
 #
 # hzclish - Hubzilla (ex Red Matrix) cli bash script.
-# Version 2.1
+# Version 2.2
 # Source: https://notabug.org/uzver/hzclish
 #
 # License: WTFPL2 http://wtfpl2.com/
 # uzver(at)protonmail.ch
 #
-# Deps: curl, jq, md2bbc.pl + libtext-markdown-perl libtext-typography-perl or pandoc + 2bbcode writer, grep, sed, awk, tr, mkdir, mktemp, rm, wc, which
+# Dependenciess:
+#  curl, jq, awk, grep, sed
+#    perl libtext-markdown-perl libtext-typography-perl md2bbc.pl
+#      or
+#    pandoc lua bbcode_phpbb.lua
+
 
 thispath="$(realpath $0)"
 thisdir="$(dirname "$thispath")"
@@ -22,59 +27,68 @@ mimetype='text/bbcode'
 USAGE(){
     exec=$(basename "$0"); [[ "$exec" ]] || exec="${0##*/}"
     cat << EOF
-  $exec - CLI bash wrapper script for the Hubzilla (Red Matrix) API.
+  $exec - CLI bash wrapper script for the Hubzilla (Red Matrix) zot API.
 
   USAGE: $exec [OPTIONS] [-u LOGIN:DOMAIN[:PASSWORD]] [<<<"MESSAGE"]
     
   OPTIONS:
-    -B                         BBCODE post instead of markdown
-                                (use if you prefer to post in bbcode,
-                                 or just as plain text, post message
-                                 won't be markdowned)
-    -c config                  Specify config file
-                                (use different configs for different accounts)
-    -d config                  Specify config file and set it as default auth
-    -D                         Delete config and cookie files
-    -g id|mid                  Get item (post) of given id or mid
-    -h, --help                 Show this help
-    -H                         HTML post instead of markdown
-                                (use if you prefer to post in html, post message
-                                 won't be markdowned)
-    -i                         Post from stdin
-    -m <str>                   Set markdown engine (overwrites: -P)
-    -p                         Post message
-    -P                         Use pandoc instead of markdown
-                                (short for: -m "pandoc -f markdown_strict+footnotes+definition_lists+hard_line_breaks -t ${thisdir}/bbcode_phpbb.lua")
-    -q                         Less verbose printing
-    -r                         Renew auth token
-    -s                         Set new authentification (save login, password)
-    -S yes|no                  Use or not https (default: yes) (useful for inline auth: -u)
-    -t                         Convert very last line with hashtags of message to categories,
-                                and post with both same hashtags and categories
-    -T                         Convert very last line with hashtags of message to categories,
-                                and drop hashtags, post only with categories
-    -u LOGIN:DOMAIN[:PASSWORD] Specify auth inline, e.g.: "inbox@example.com:hubdomain.com:password", or:
-        "channel@hubdomain.com:password", or:
-        "channel@hubdomain.com"
-                                (use it if you do not want to save auth)
-                                (implies not use with: -c, -D, -r, -s)
-    -v                         Verbose mode
+    -B                          BBCODE post instead of markdown
+                                 (By default script posts in markdown.
+                                  Use this option if you prefer to post in bbcode
+                                  or plain text. Post message won't be markdowned).
+    -c config                   Specify config file to use.
+                                 (use different configs for different accounts).
+    -d                          Set config file as default auth (requires: -s|-g|-p).
+    -D                          Delete config and cookie files.
+    -g id|mid                   Get item (post) of given id or mid.
+    -h, --help                  Show this help.
+    -H                          HTML post instead of markdown
+                                 (By default script posts in markdown.
+                                  Use this option if you prefer to post in html.
+                                  Post message won't be markdowned).
+    -i                          Post from standart input.
+    -m <str>                    Set your custom markdown-to-bbcode engine (overwrites: -P).
+    -p                          Post the message.
+    -P                          Use pandoc instead of md2bbc.pl to convert markdown to bbcode
+                                 (it's short for:
+                                  -m "pandoc -f markdown_strict+footnotes+definition_lists+hard_line_breaks -t ${thisdir}/bbcode_phpbb.lua").
+    -q                          Less verbose printing.
+    -R                          Renew auth token.
+    -s                          Set new authentification (save login, password).
+    -S yes|no                   Use or not https (default: yes) (useful for inline auth: -u).
+    -t                          Convert very last line (of your post) with hashtags to categories,
+                                 and post with the same hashtags and categories.
+    -T                          Convert very last line (of your post) with hashtags to categories,
+                                 and drop hashtags. Post only with categories.
+    -u LOGIN:DOMAIN[:PASSWORD]  Specify auth inline, e.g.:
+                                 "inbox@example.com:hubdomain.com:password",
+                                 or:
+                                  "channelname@hubdomain.com:password", or:
+                                  "channelname@hubdomain.com"
+                                 (use it if you do not want to save auth)
+                                 (implies not to use with: -c, -D, -r, -s).
+    -v                          Verbose mode.
 
   EXAMPLES:
-    Set authentification to config file:
-      $exec -vs
-     or to custom place:
-      $exec -vc myConfig -s   # save in "$dotdir"
-      $exec -vc ~/myConfig -s   # save in home directory
-     or to custom place and set it default:
-      $exec -vd myNewDefaultConfig -s   # save in "$dotdir"
-      $exec -vd ~/myNewDefaultConfig -s   # save in home directory
+    Save new authentification to config file and set it default:
+      $exec -s
+     or save new auth and set it default:
+      $exec -vds                               # verbose
+     or to custom place or name:
+      $exec -vc ~/myConfig -s                  # save to myConfig file in home
+                                                  directory
+      $exec -vc myConfig -s                    # save to "$dotdir"/myConfig file
+     or to custom place or name and set default:
+      $exec -vdc ~/myConfig -s                 # save to myConfig file in home
+                                                  directory
+      $exec -vdc myConfig -s                   # save to "$dotdir"/myConfig file
 
     Post message:
       $exec
       $exec -vp
-      $exec -c myConfig   # with custom config
-      $exec -d myNewDefaultConfig   # with custom config & set it default
+      $exec -c myConfig                        # with custom config
+      $exec -dc myNewDefaultConfig             # with custom config & set it
+                                                  default
 
     Post message from stdin:
       $exec <<<"Hello world!"
@@ -84,20 +98,30 @@ USAGE(){
     Get item by id or mid:
       $exec -g 1234567
       $exec -g 80833f7ead182a3f5b39079c3b3974acf4828e1113193a3160bd6c29df1f8c89@lastauth.com
-      $exec -c myConfig -g 1234567   # with custom config
-      $exec -d myNewDefaultConfig -g 1234567   # with custom config & set it default
+      $exec -c myConfig -g 1234567             # with custom config
+      $exec -dc myNewDefaultConfig -g 1234567  # with custom config & set it
+                                                  default
 EOF
 }
 
 CONFIG(){
-    # Check for config file and create it if it does not exist
+    # Check for config file and create new one if it does not exist
     if ! (($custconfig)) && ! (($setnew)); then
         confdir="$dotdir"
-        [[ -f "${confdir}/defaultconfig" ]] && source "${confdir}/defaultconfig"
+        if  [[ -f "${confdir}/defaultconfig" ]]; then
+            source "${confdir}/defaultconfig"
+        else
+            echo -e '\e[37;31m'"\e[1m[error]\e[0m" "Can't find defaultconfig" >&2
+            exitstatus=1
+        fi
     else
         ! (($quiet)) && (($verbose)) && [[ $config ]] && echo -e "\e[0;36m""Using config: $config""\e[m"
+        # Find directory of config file if '$config' is file and set it as config directory '$confdir'
         [[ -f "$config" ]] && confdir=$(dirname "$config")
+        # In case '$config' is zid:
+        #  set config directory to script dot directory '$dotdir'
         [[ -d "$confdir" ]] || confdir="$dotdir"
+        # Create path to config file and set it as '$config'
         if [[ -f "$config" ]]; then
             true
         else
@@ -111,11 +135,12 @@ CONFIG(){
 # echo config "$config"
 # exit
     fi
+
     if [[ -f "$config" ]]; then
         ! (($quiet)) && (($verbose)) && echo -e "\e[0;36m""Using config: $config""\e[m"
         # (($custconfig)) && confdir=$(dirname "$config")
         if (($setdefconf)); then
-            ! (($quiet)) && (($verbose)) && echo -e "\e[0;36m""Setting default config: $config""\e[m"
+            ! (($quiet)) && (($verbose)) && echo -e "\e[0;36m""Setting default config to: $config""\e[m"
             echo "config=\"$config\"">"${confdir}/defaultconfig" && [[ -f "${confdir}/defaultconfig" ]] && chmod 600 "${confdir}/defaultconfig"
         fi
     else
@@ -157,24 +182,23 @@ CONFIG(){
         fi
         if ! [[ "$login" ]]; then
             echo 'Please specify login'
+            exitstatus=1
             (($verbose)) && echo -e "\e[0;36m""Exiting""\e[m"
-            exit 1
+            exit $exitstatus
         fi
         if ! (($custconfig)); then
             config="${confdir}/${zid}.config"
         fi
-
         # if [[ "$(grep 'token=.\+' "$config")" ]]; then
-        source "$config"
+        [[ -f "$config" ]] && source "$config"
         if [[ "$token" ]]; then
             echo -e '\e[37;31m'"\e[1m[error]\e[0m" "Script appears to be registered previously" >&2
-            echo "Use -D option to delete auth and then -s to try again" >&2
+            echo "        Use: "$exec" '-D ${zid}' to delete auth and then '-s' option to try again" >&2
             (($verbose)) && echo -e "\e[0;36m""Exiting""\e[m"
             exit 1
         fi
-
-        if [[ ! -f "${confdir}/defaultconfig" || "$(wc -m "${confdir}/defaultconfig"|cut -d ' ' -f 1)" == 0 ]] || (($setdefconf)); then
-            ! (($quiet)) && (($verbose)) && echo -e "\e[0;36m""Setting default config: $config""\e[m"
+        if (($setdefconf)) || [[ ! -f "${confdir}/defaultconfig" || "$(wc -m "${confdir}/defaultconfig"|cut -d ' ' -f 1)" == 0 ]]; then
+            ! (($quiet)) && (($verbose)) && echo -e "\e[0;36m""Setting default config to: $config""\e[m"
             echo "config=\"$config\"">"${confdir}/defaultconfig" && [[ -f "${confdir}/defaultconfig" ]] && chmod 600 "${confdir}/defaultconfig"
         fi
         cookie="${zid}.cookie"
@@ -197,16 +221,22 @@ EOF
     source "$config"
     [[ -f "${confdir}/${zid}.cookie" ]] || (touch "${confdir}/${zid}.cookie" && chmod 600 "${confdir}/${zid}.cookie")
 
-    if [[ "$(which md2bbc >& /dev/null; echo $?)" == 0 ]]; then
-        markdown="md2bbc"
-    elif [[ -f ~/"bin/md2bbc.pl" ]]; then
-        markdown=~/"bin/md2bbc.pl"
-    elif [[ -f "${thisdir}/md2bbc.pl" ]]; then
-        markdown="${thisdir}/md2bbc.pl"
-    elif [[ -f "${confdir}/md2bbc.pl" ]]; then
-        markdown="${confdir}/md2bbc.pl"
-    elif [[ -f "${dotdir}/md2bbc.pl" ]]; then
-        markdown="${dotdir}/md2bbc.pl"
+    if ! (($pandoc)) && ! [[ "$mdexec" ]]; then
+        if [[ "$(which md2bbc >& /dev/null; echo $?)" == 0 || -f ~/"bin/md2bbc" ]]; then
+            markdown="md2bbc"
+        elif [[ -f ~/"bin/md2bbc.pl" ]]; then
+            markdown=~/"bin/md2bbc.pl"
+        elif [[ -f "${thisdir}/md2bbc.pl" ]]; then
+            markdown="${thisdir}/md2bbc.pl"
+        elif [[ -f "${confdir}/md2bbc.pl" ]]; then
+            markdown="${confdir}/md2bbc.pl"
+        elif [[ -f "${dotdir}/md2bbc.pl" ]]; then
+            markdown="${dotdir}/md2bbc.pl"
+        else
+            echo -e '\e[37;31m'"\e[1m[error]\e[0m" "No md2bbc.pl script was found. Please install the md2bbc.pl script to one of these locations: ~/bin, ~/.hzclish or near to hzclish script or use the pandoc via -P option" >&2
+            (($verbose)) && echo -e "\e[0;36m""You can find the script in git repo""\e[m" >&2
+            exitstatus=1
+        fi
     fi
     if [[ "$(which jq >& /dev/null; echo $?)" == 0 ]]; then
         jq="jq"
@@ -244,7 +274,7 @@ SETAUTH(){
     CONFIG
     source "$config"
     if ! [[ "$password" ]]; then
-        echo -e '\e[37;34m'"\e[1m[notice]\e[0m" "This will be the only time you will be asked for your password"
+        echo -e '\e[37;34m'"\e[1m[notice]\e[0m" "This is the only time you asked for your password"
         echo "Your password will be stored plain in config file"
         PASSWORD
     fi
@@ -257,11 +287,11 @@ SETAUTH(){
     # source "$config"
     echo "Getting token..."
     getauth=$(curl -ksSi --trace-ascii - \
-        -u "${login}:$password" \
+        -u "${login}:${password}" \
         --cookie-jar "${confdir}/$cookie" --cookie "${confdir}/$cookie" \
         -H "User-Agent: $useragent" \
         "${hub}/api/z/1.0/abconfig")
-    token=$(echo "$getauth"|sed -n 's/^.*Authorization: Basic \(.*\)/\1/p1')
+    token=$(echo "$getauth"|sed -n 's/^.*[aA]uthorization: [Bb]asic \(.*\)/\1/p1')
 
     # unset getauth
     if [[ "$token" ]]; then
@@ -274,7 +304,7 @@ SETAUTH(){
     else
         echo -e '\e[37;31m'"\e[1m[error]\e[0m" "Getting token failed. Check/set your login/password/connection" >&2
 (($verbose)) && echo -e '\e[37;31m'"\e[1m[post]\e[0m" >&2 && echo "$getauth" >&2
-unset getauth
+        unset getauth
         (($verbose)) && echo -e "\e[0;36m""Exiting""\e[m"
         exitstatus=1
     fi
@@ -315,7 +345,7 @@ RETOKEN(){
         local body=$(echo -n "$getauth"|grep -iom1 '{\".*[^\]\(["}]\|\]\)}')
         [[ "$body" ]] || body=$(echo -n "$getauth"|grep -i 'error')
         unset password
-        token=$(echo "$getauth"|sed -n 's/^.*Authorization: Basic \(.*\)/\1/p1')
+        token=$(echo "$getauth"|sed -n 's/^.*[aA]uthorization: [Bb]asic \(.*\)/\1/p1')
 
         # unset getauth
         if [[ "$token" ]]; then
@@ -460,7 +490,7 @@ GETPOST(){
             fi
         else
             echo -e "\n\e[0;36m""$posturl2""\e[m"
-        fi  
+        fi
     else
         echo -e '\e[37;31m'"\e[1m[error]\e[0m" "No post returned, please try again or give up" >&2
 (($verbose)) && echo -e '\e[37;31m'"\e[1m[post]\e[0m" >&2 && cat "$post" >&2
@@ -510,17 +540,22 @@ POST(){
                 echo -e '\e[37;31m'"\e[1m[error]\e[0m" "The message is empty. Not posting message" >&2
                 echo "Not deleting the file \"$message\" in case it is not empty" >&2
                 /bin/rm -f "$msgbody"
+                exitstatus=1
                 (($verbose)) && echo -e "\e[0;36m""Exiting""\e[m"
-                exit 1
+                exit $exitstatus
             fi
             ## Delete leading blank lines
             sed -i '/./,$!d' "$message"
+
+            msglines=$(wc -l "$message"|cut -d ' ' -f 1)
         fi
-        if [[ ! "$tagline" ]]; then
+        # Make tags only if message length more than 1 line
+        if [[ ! "$tagline" ]] && [[ "$msglines" -gt 1 ]]; then
             tagline=$(tail -n 1 "$message" | grep -io '^[[:space:]]*\?\#.*\?')
              [[ "$tagline" ]] && hastagline="$tagline"
             ! (($catonly)) && tags=$(echo "$tagline" | sed 's|^[[:space:]]*||; s|,||g')
         fi
+#cat "$message"; exit
         if [[ ! "$catline" ]]; then
             catline=$(head -n 1 "$message" | grep -iom1 '^[[:space:]]*\?\*.*\?')
             [[ "$catline" ]] && hascatline=1
@@ -556,6 +591,7 @@ POST(){
             tagline='' && tags=''
             [[ "$hastagline" ]] && echo "$(awk -F "$hastagline" '{print $1}' "$msgbody")" >"$msgbody"
         fi
+#cat "$msgbody"; exit
 # echo msg "$msg"
 # echo hasmsg $hasmsg
 # echo hastagline $hastagline
@@ -568,14 +604,19 @@ POST(){
             ## Delete leading blank lines
             sed -i '/./,$!d' "$msgbody"
         fi
+#cat "$msgbody"; exit
 # exit
         # titleline=$(head -n 1 "$msgbody" | grep -iom1 '^[[:space:]]*\?\#[[:space:]]\+.*\?')
         # [[ "$titleline" ]] && sed -i '/'"$titleline"'/d' "$msgbody"
         # [[ "$titleline" ]] && echo "$(awk -F "$titleline" '{print $1}' "$msgbody")" >"$msgbody"
-        title=$(head -n 1 "$msgbody" | grep -iom1 '^[[:space:]]*\?\#[[:space:]]\+.*\?' | sed 's/\"/\\"/g; s/^[[:space:]]*\?\#[[:space:]]\+//g')
+        title=$(head -n 1 "$msgbody" | grep -iom1 '^[[:space:]]*\?\#[[:space:]]\+.*\?' | sed 's/^[[:space:]]*\?\#[[:space:]]\+//g')
+#cat "$msgbody"; exit
+        ## If title field seted than delete title from body
         [[ "$title" ]] && sed -i 1d "$msgbody"
+#cat "$msgbody"; exit
         ## Delete leading blank lines
         sed -i '/./,$!d' "$msgbody"
+#cat "$msgbody"; exit
 # exit
 # echo hasmsg $hasmsg
 # echo hastagline $hastagline
@@ -600,6 +641,10 @@ POST(){
                 bbcode="${confdir}/bbcode_phpbb.lua"
             elif [[ -f "${dotdir}/bbcode_phpbb.lua" ]]; then
                 bbcode="${dotdir}/bbcode_phpbb.lua"
+            else
+                echo -e '\e[37;31m'"\e[1m[error]\e[0m" "No bbcode_phpbb.lua was found. Please install the bbcode_phpbb.lua script to one of these locations: ~/bin, ~/.hzclish or near to hzclish script" >&2
+                (($verbose)) && echo -e "\e[0;36m""You can find the script in git repo""\e[m" >&2
+                exitstatus=1
             fi
             # markdown="pandoc -f markdown -t $bbcode" # (pandoc's extended markdown)
             # markdown="pandoc -f markdown_phpextra -t $bbcode" # (PHP Markdown Extra extended markdown)
@@ -609,10 +654,28 @@ POST(){
         elif [[ "$mdexec" ]]; then
             markdown="$mdexec"
         fi
-        echo "$(if (($bb)) || (($html)); then cat "$msgbody"; else cat "$msgbody"|$markdown; fi; [[ "$tags" ]] && echo -en "\n$tags")" >"$msgbody"
+        
+        if (($exitstatus)); then
+            (($verbose)) && echo -e "\e[0;36m""Exiting""\e[m"
+            exit $exitstatus
+        fi
+
+        #echo "$(if (($bb)) || (($html)); then cat "$msgbody"; else cat "$msgbody"|$markdown; fi; [[ "$tags" ]] && echo -en "\n$tags")" >"$msgbody" 
+        if (($bb)) || (($html)); then
+            true
+        else
+            if (($pandoc)); then
+                $markdown -o "$msgbody" <"$msgbody"
+            else
+                $markdown <"$msgbody" 1<>"$msgbody"
+            fi
+        fi
+#cat "$msgbody"
+#exit
+        [[ "$tags" ]] && echo -en "\n$tags" >>"$msgbody"
         # [[ "$htmlstatus" ]] && echo "htmlstatus=\"$htmlstatus\"">>"$msgbody"
 # echo msg "$msg"
-# exit
+#echo $title;  exit
         # source "$msgbody"
 # echo " export token='$token'"
 # echo " export useragent='$useragent'"
@@ -736,10 +799,28 @@ POST(){
 
 # DELETE CONFIG & COOKIE
 DELETE(){
-    [[ "$config" ]] && source "$config" && unset password
-    ! (($quiet)) && echo Deleting: cookie: "${confdir}/${zid}.cookie", config: "$config"
-    [[ "$confdir" && "$zid" ]] && [[ -f "${confdir}/${zid}.cookie" ]] && /bin/rm -f "${confdir}/${zid}.cookie"
-    [[ "$config" ]] && [[ -f "$config" ]] && /bin/rm -f "$config"
+    ! (($quiet)) && (($verbose)) && [[ $zid ]] && echo -e "\e[0;36m""Using config: $zid""\e[m"
+    # Find directory of config file if '$config' is file and set it as config directory '$confdir'
+    [[ -f "$zid" ]] && local confdir=$(dirname "$zid")
+    # In case '$config' is zid:
+    #  set config directory to script dot directory '$dotdir'
+    [[ -d "$confdir" ]] || local confdir="$dotdir"
+    # Create path to config file and set it as '$config'
+    if [[ -f "$zid" ]]; then
+        true
+    else
+        if [[ -f "${confdir}/${zid}" ]]; then
+            local config="${confdir}/$zid"
+            local cookie="${confdir}/${zid%.config}.cookie"
+        elif [[ -f "${confdir}/${zid}.config" ]]; then
+            local config="${confdir}/${zid}.config"
+            local cookie="${confdir}/${zid%.config}.cookie"
+        fi
+    fi
+    ! (($quiet)) && echo Deleting cookie: "$cookie"
+    [[ -f "$cookie" ]] && /bin/rm -f "$cookie"
+    ! (($quiet)) && echo Deleting config: "$config"
+    [[ -f "$config" ]] && /bin/rm -f "$config"
 }
 
 if [[ $# -lt 1 ]]; then
@@ -751,7 +832,7 @@ elif [[ "$1" == '--help' ]]; then
 fi
 
 # RUN OPTIONS
-while getopts "B:c:d:Dg:hHim:pPqrsS:tTu:v" OPTION
+while getopts "B:c:dD:g:hHim:pPqRsS:tTu:v" OPTION
 do
   case $OPTION in
     B)
@@ -765,14 +846,15 @@ do
       fi
       ;;
     d)
-      if [[ "$OPTARG" ]]; then
-        config="$OPTARG"
-        custconfig=1
-      fi
+      #if [[ "$OPTARG" ]]; then
+      #  config="$OPTARG"
+      #  custconfig=1
+      #fi
       setdefconf=1
       ;;
     D)
       exe=1
+      zid="$OPTARG"
       DELETE
       ;;
     g)
@@ -793,7 +875,7 @@ do
       ;;
     m)
       mdexec="$OPTARG"
-      html=1
+      #html=1
       ;;
     p)
       exe=1
@@ -801,7 +883,7 @@ do
       ;;
     P)
       pandoc=1
-      html=1
+      #html=1
       ;;
     q)
       quiet=1
@@ -887,6 +969,7 @@ fi
 exit 0
 
 ### TODO:
+# read post + comments
 # private post
 # use keyring
 # delete post
@@ -895,7 +978,6 @@ exit 0
 # reshare post
 # like, dislike
 # attach image to post
-# read post + comments
 # notifications
 # debug
 # version option
