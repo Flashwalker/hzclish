@@ -21,6 +21,7 @@ verbose=0
 ssl=1
 useragent='Mozilla/5.0 (Windows NT 6.1; rv:41.0) Gecko/20100101 Firefox/41.0'
 mimetype='text/bbcode'
+postpublic=1
 
 # FUNCTIONS
 
@@ -397,9 +398,13 @@ GETPOST(){
         if [[ "$1" =~ .+@.+ ]]; then
             mid="$1"
             local req="mid=${mid%%&*}"
+        elif [[ "$mid" =~ ^b64\.+ ]]; then
+            mid="$1"
+            mid=$(base64 -d <<<"${mid#b64.}" 2>&1); mid="${mid%base64*}"; mid="${mid##*/}"
+            local req="mid=${mid%%&*}"
         else
             pid="$1"
-            local req="item_id=$pid"
+            local req="item_id=${pid}"
         fi
     else
         echo 'Please specify the message id'
@@ -410,7 +415,7 @@ GETPOST(){
     GETPOSTINIT(){
         if (($inlineauth)); then
             ! [[ "$password" ]] && PASSWORD
-            (($verbose)) && echo -e "\e[0;36m""Getting post ${req#*=}...""\e[m"
+            (($verbose)) && echo -e "\e[0;36m""Getting post ${req#*=} ...""\e[m"
             curl -ksSi -u "${login}:$password" \
                 -H "User-Agent: $useragent" \
                 -H "Content-Type: application/json" \
@@ -419,12 +424,13 @@ GETPOST(){
             unset password
         else
             (($verbose)) && echo -e "\e[0;36m""Getting post ${req#*=}...""\e[m"
+            (($verbose)) && echo -e "curl -ksSi -H \"Authorization: Basic $token\" --cookie-jar \"${confdir}/$cookie\" --cookie \"${confdir}/$cookie\" -H \"User-Agent: $useragent\" -H \"Content-Type: application/json\" -H \"Accept: application/json\" \"${hub}/api/z/1.0/item/full?$req\""
             curl -ksSi \
                 -H "Authorization: Basic $token" \
                 --cookie-jar "${confdir}/$cookie" --cookie "${confdir}/$cookie" \
                 -H "User-Agent: $useragent" \
                 -H "Content-Type: application/json" \
-                -H 'Accept: application/json' \
+                -H "Accept: application/json" \
                 "${hub}/api/z/1.0/item/full?$req" >"$post"
             unset password
             unset token
@@ -435,7 +441,8 @@ GETPOST(){
             pid=$("$jq" -r '.item|.[].id' "$postbody")
             mid=$("$jq" -r '.item|.[].message_id' "$postbody")
             posturl=$("$jq" -r '.item|.[].permalink' "$postbody")
-            posturl2="$(echo -n "$posturl"|sed 's|^.*\(https\?://[^/]\+\)/.*|\1|')/display/$mid"
+#            posturl2="$(echo -n "$posturl"|sed 's|^.*\(https\?://[^/]\+\)/.*|\1|')/display/${mid##*/}"
+#            posturl2="$(echo -n "$posturl"|sed 's|^.*\(https\?://[^/]\+\)/.*|\1|')/item/${mid##*/}"
             if ! (($urlonly)); then
                 username=$("$jq" -r '.item|.[].author.name' "$postbody")
                 useraddr=$("$jq" -r '.item|.[].author.address' "$postbody")
@@ -484,12 +491,14 @@ GETPOST(){
             [[ "$posttitle" ]] && echo -e "${posttitle}\n"
             "$jq" -r '.item|.[].body' "$postbody"
             if ! (($quiet)); then
-                echo -e "\n\e[0;36m""post url: $posturl2""\e[m"
+#                echo -e "\n\e[0;36m""post url: $posturl2""\e[m"
+                echo -e "\n\e[0;36m""post url: $posturl""\e[m"
                 (($verbose)) && echo -e "\e[0;36m""post id: $pid""\e[m"
                 (($verbose)) && echo -e "\e[0;36m""user url: $userurl""\e[m"
             fi
         else
-            echo -e "\n\e[0;36m""$posturl2""\e[m"
+#            echo -e "\n\e[0;36m""$posturl2""\e[m"
+            echo -e "\n\e[0;36m""$posturl""\e[m"
         fi
     else
         echo -e '\e[37;31m'"\e[1m[error]\e[0m" "No post returned, please try again or give up" >&2
@@ -698,6 +707,7 @@ POST(){
             -F "title=$title" \
             -F "category=$category" \
             -F "mimetype=$mimetype" \
+            $((($postpublic)) && echo "-F group_allow=") \
             -F 'body=<-' >"$post"
             unset password
         else
@@ -711,6 +721,7 @@ POST(){
             -F "title=$title" \
             -F "category=$category" \
             -F "mimetype=$mimetype" \
+            $((($postpublic)) && echo "-F group_allow=") \
             -F 'body=<-' >"$post"
             unset password
             unset token
@@ -781,10 +792,10 @@ POST(){
             elif [[ "$mid" ]]; then
                 local id="$mid"
             fi
-            echo -e '\e[37;32m'"\e[1m[success]\e[0m" "Message "$id" posted"
+            echo -e '\e[37;32m'"\e[1m[success]\e[0m" "Message posted with id: ${id}"
             echo -en "\e[0;36m""post url: ""\e[m"
         fi
-        echo -e "\e[0;36m""$posturl2""\e[m"
+        echo -e "\e[0;36m""$posturl""\e[m"
         /bin/rm -f "$message" "$msgbody"
     else
         echo -e '\e[37;31m'"\e[1m[error]\e[0m" "No post id returned, please try again or give up" >&2
