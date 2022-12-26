@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # hzclish - Hubzilla (ex Red Matrix) cli bash script.
-# Version 2.2
+# Version 2.2.1
 # Source: https://notabug.org/uzver/hzclish
 #
 # License: WTFPL2 http://wtfpl2.com/
@@ -31,24 +31,34 @@ USAGE(){
   $exec - CLI bash wrapper script for the Hubzilla (Red Matrix) zot API.
 
   USAGE: $exec [OPTIONS] [-u LOGIN:DOMAIN[:PASSWORD]] [<<<"MESSAGE"]
-    
+
   OPTIONS:
-    -B                          BBCODE post instead of markdown
-                                 (By default script posts in markdown.
-                                  Use this option if you prefer to post in bbcode
-                                  or plain text. Post message won't be markdowned).
+    -B                          BBCODE mimetype post. Send post as bbcode.
+                                 (By default this script converts your post via markdown to bbcode.
+                                  You can Use this option if you prefer to write the post in bbcode
+                                  or plain text so post message won't be converted to bbcode).
     -c config                   Specify config file to use.
                                  (use different configs for different accounts).
     -d                          Set config file as default auth (requires: -s|-g|-p).
     -D                          Delete config and cookie files.
     -g id|mid                   Get item (post) of given id or mid.
     -h, --help                  Show this help.
-    -H                          HTML post instead of markdown
-                                 (By default script posts in markdown.
-                                  Use this option if you prefer to post in html.
-                                  Post message won't be markdowned).
+    -H                          HTML mimetype post. Send post as html.
+                                 (By default this script converts your post via markdown to bbcode.
+                                  Use this option if you prefer to write the post in html.
+                                  Server will store the post as html. Hashtags won't works in this case.
+                                  Post message won't be converted to html or bbcode).
     -i                          Post from standart input.
-    -m <str>                    Set your custom markdown-to-bbcode engine (overwrites: -P).
+    -m <str>                    Set your custom markdown converter engine (overwrites: -P).
+                                  You can use this option e.g. to set the engine as 'markdown'
+                                  and also pass the -H option, and write post in markdown.
+                                  In this way the post will be converted to html so the server will get
+                                  and store the post as html. Hashtags won't works in this case.
+    -M                          MARKDOWN mimetype post. Send post as markdown.
+                                 (By default this script converts your post via markdown to bbcode.
+                                  Use this option to let the server to store the post
+                                  as markdown. Hashtags won't works in this case.
+                                  Post message won't be converted to bbcode or html).
     -p                          Post the message.
     -P                          Use pandoc instead of md2bbc.pl to convert markdown to bbcode
                                  (it's short for:
@@ -284,7 +294,7 @@ SETAUTH(){
     if (($verbose)); then
         echo -e "\e[0;36m""Password have been saved to $config""\e[m"
     fi
-    
+
     # source "$config"
     echo "Getting token..."
     getauth=$(curl -ksSi --trace-ascii - \
@@ -561,7 +571,7 @@ POST(){
         # Make tags only if message length more than 1 line
         if [[ ! "$tagline" ]] && [[ "$msglines" -gt 1 ]]; then
             tagline=$(tail -n 1 "$message" | grep -io '^[[:space:]]*\?\#.*\?')
-             [[ "$tagline" ]] && hastagline="$tagline"
+            [[ "$tagline" ]] && hastagline="$tagline"
             ! (($catonly)) && tags=$(echo "$tagline" | sed 's|^[[:space:]]*||; s|,||g')
         fi
 #cat "$message"; exit
@@ -589,8 +599,8 @@ POST(){
         # msg=$(cat "$message")
         cp "$message" "$msgbody"
 # echo msg "$msg"
-# echo 
-# echo 
+# echo
+# echo
 # exit
         if ! (($catonly)); then
             if [[ "$tagline" || "$hastagline" ]]; then
@@ -636,7 +646,7 @@ POST(){
 # echo catline "$catline"
 # echo catsarr "${catsarr[@]}"
 # echo title "$title"
-# echo -n 'message '; cat "$message"; echo 
+# echo -n 'message '; cat "$message"; echo
 # echo msg "$msg"
 # exit
         # [[ "$title" ]] && echo "title=\"$title\"">"$msgbody"
@@ -663,19 +673,23 @@ POST(){
         elif [[ "$mdexec" ]]; then
             markdown="$mdexec"
         fi
-        
+
         if (($exitstatus)); then
             (($verbose)) && echo -e "\e[0;36m""Exiting""\e[m"
             exit $exitstatus
         fi
 
-        #echo "$(if (($bb)) || (($html)); then cat "$msgbody"; else cat "$msgbody"|$markdown; fi; [[ "$tags" ]] && echo -en "\n$tags")" >"$msgbody" 
-        if (($bb)) || (($html)); then
+        #echo "$(if (($mimebb)) || (($mimehtml)); then cat "$msgbody"; else cat "$msgbody"|$markdown; fi; [[ "$tags" ]] && echo -en "\n$tags")" >"$msgbody"
+        # If custom markdown not set and custom mimetype is set, then do not convert
+        if ! [[ "$mdexec" ]] && ((($mimebb)) || (($mimehtml)) || (($mimemarkdown))); then
+            # do not convert (let server handle it according mimetype)
             true
         else
             if (($pandoc)); then
+                # use pandoc to markdown to bbcode
                 $markdown -o "$msgbody" <"$msgbody"
             else
+                # use chosen markdown engine to markdown
                 $markdown <"$msgbody" 1<>"$msgbody"
             fi
         fi
@@ -784,7 +798,7 @@ POST(){
             fi
         fi
     fi
-    
+
     if [[ "$pid" ]]; then
         if ! (($quiet)); then
             if [[ "$pid" ]]; then
@@ -843,11 +857,11 @@ elif [[ "$1" == '--help' ]]; then
 fi
 
 # RUN OPTIONS
-while getopts "B:c:dD:g:hHim:pPqRsS:tTu:v" OPTION
+while getopts "B:c:dD:g:hHim:MpPqRsS:tTu:v" OPTION
 do
   case $OPTION in
     B)
-      bb=1
+      mimebb=1
       mimetype='text/bbcode'
       ;;
     c)
@@ -878,7 +892,7 @@ do
       USAGE
       ;;
     H)
-      html=1
+      mimehtml=1
       mimetype='text/html'
       ;;
     i)
@@ -887,6 +901,10 @@ do
     m)
       mdexec="$OPTARG"
       #html=1
+      ;;
+    M)
+      mimemarkdown=1
+      mimetype='text/markdown'
       ;;
     p)
       exe=1
